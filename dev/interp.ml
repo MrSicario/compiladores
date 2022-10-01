@@ -107,7 +107,7 @@ let interp_sys name vals =
   | "xor" -> (match vals with
               | BoolV b1 :: BoolV b2 :: [] -> BoolV (b1 <> b2)
               | _ -> raise_arity_mismatch name 2 arg_count)
-  | _ -> raise (RTError (Printf.sprintf "Undefined function: %s" name))
+  | _ -> raise (CTError (Printf.sprintf "Undefined function: %s" name))
 
 (* interpreter *)
 let rec interp expr env fenv =
