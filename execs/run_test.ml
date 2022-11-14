@@ -503,7 +503,7 @@ let test_lambda_app_arity_mismatch_less_args () =
                       (@ (lambda (x y) (+ y x)) 4))")))
                     empty_env) in 
   check_raises  "should report that lambda application received less arguments" 
-  (CTError "Arity mismatch: closure expected 2 arguments but got 1") v
+  (RTError "Arity mismatch: closure expected 2 arguments but got 1") v
 
 let test_lambda_app_arity_mismatch_more_args () =
   let v = (fun () -> ignore @@
@@ -511,7 +511,7 @@ let test_lambda_app_arity_mismatch_more_args () =
                       (@ (lambda () (tup 1 2)) false 6 (tup)))")))
                     empty_env) in 
   check_raises  "should report that lambda application received more arguments" 
-  (CTError "Arity mismatch: closure expected 0 arguments but got 3") v
+  (RTError "Arity mismatch: closure expected 0 arguments but got 3") v
 
 
 (* OCaml tests: extend with your own tests *)
