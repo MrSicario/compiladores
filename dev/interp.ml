@@ -129,11 +129,12 @@ let rec check_type (t : ctype) (v : value) : value =
   | _, CTuple _ -> raise_type_error "tuple" v            
 
 (* Arity checks *)
-let raise_arity_mismatch (fun_id : string) (expected : int) (received : int) : 'a =
-  raise (CTError (sprintf "Arity mismatch: %s expected %d arguments but got %d" fun_id expected received))
+let raise_arity_mismatch (fun_id : string) (expected : int) (received : int) (is_runtime_exn : bool) : 'a =
+  let err_msg = (sprintf "Arity mismatch: %s expected %d arguments but got %d" fun_id expected received) in
+  raise (if is_runtime_exn then (RTError err_msg) else (CTError err_msg))
 
-let check_arity (fun_id : string) (expected : int) (received : int) : unit =
-  if expected == received then () else raise_arity_mismatch fun_id expected received
+let check_arity (fun_id : string) (expected : int) (received : int) (is_runtime_exn : bool) : unit =
+  if expected == received then () else raise_arity_mismatch fun_id expected received is_runtime_exn
 
 (* provide a dummy (non-C) interpretation of sys functions print and max *)
 let interp_sys name vals = 
@@ -141,13 +142,13 @@ let interp_sys name vals =
   match name with
   | "print" -> (match vals with 
                 | v :: [] -> Printf.printf "> %s\n" (string_of_val v) ; v
-                | _ -> raise_arity_mismatch name 1 arg_count)
+                | _ -> raise_arity_mismatch name 1 arg_count false)
   | "max" -> (match vals with
               | NumV n1 :: NumV n2 :: [] -> NumV (if n1 >= n2 then n1 else n2)
-              | _ -> raise_arity_mismatch name 2 arg_count)
+              | _ -> raise_arity_mismatch name 2 arg_count false)
   | "xor" -> (match vals with
               | BoolV b1 :: BoolV b2 :: [] -> BoolV (b1 <> b2)
-              | _ -> raise_arity_mismatch name 2 arg_count)
+              | _ -> raise_arity_mismatch name 2 arg_count false)
   | _ -> raise (RTError (sprintf "Undefined function: %s" name))
 
 (* interpreter *)
@@ -177,10 +178,10 @@ let rec interp expr env fenv =
     let received_count = List.length vals in
     (match lookup_fenv name fenv with
     | DefFun (_, params, body) -> 
-      check_arity name (List.length params) received_count ;
+      check_arity name (List.length params) received_count false ;
       interp body (extend_env params vals env) fenv
     | DefSys (_, arg_types, ret_type) ->
-      check_arity name (List.length arg_types) received_count ;
+      check_arity name (List.length arg_types) received_count false ;
       check_type ret_type @@ interp_sys name (List.map2 check_type arg_types vals))
   | Tuple exprs -> 
           TupleV (List.map (fun e -> (ref (interp e env fenv))) exprs)
@@ -201,7 +202,7 @@ let rec interp expr env fenv =
       | ClosureV (arity, closure) -> 
         let vals = List.map (fun e -> interp e env fenv) args in
         let received_count = List.length vals in
-        check_arity "closure" arity received_count ;
+        check_arity "closure" arity received_count true ;
         closure vals
       | _ -> raise_type_error "closure" fun_val
     )
