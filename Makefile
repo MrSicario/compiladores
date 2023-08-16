@@ -2,12 +2,13 @@
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	BIN_FORMAT = elf64
-	CFLAGS ?= -z notext -g
+	TARGET = x86_64-linux
 endif
 ifeq ($(UNAME_S),Darwin) # for mac
 	BIN_FORMAT = macho64
-	CFLAGS ?= -Wl,-no_pie
+	TARGET = x86_64-darwin
 endif
+export CFLAGS ?= -target $(TARGET) -g
 
 F =  # nothing by default
 src = # nothing by default
