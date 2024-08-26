@@ -3,7 +3,6 @@ val value : Dev.Lib.value Alcotest.testable
 val test_parse_int : unit -> unit
 val test_parse_var : unit -> unit
 val test_parse_compound : unit -> unit
-val test_parse_error : unit -> unit
 val test_interp_num : unit -> unit
 val test_interp_var : unit -> unit
 val test_interp_compound : unit -> unit
