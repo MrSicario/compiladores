@@ -1,0 +1,6 @@
+NAME: let_nested
+DESCRIPTION: multiple nested let bindings
+SRC:
+(let (a 11) (let (z 17)) (+ a z))
+EXPECTED:
+|ORACLE

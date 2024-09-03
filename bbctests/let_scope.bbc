@@ -1,0 +1,7 @@
+NAME: let_scope
+DESCRIPTION: evaluates an identifier outside of a previously used let binding
+STATUS: CT error
+SRC:
+(+ (let (m 4) m) m)
+EXPECTED:
+.*unknown identifier.*

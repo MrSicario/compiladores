@@ -1,0 +1,6 @@
+NAME: if
+DESCRIPTION: evaluates a condition
+SRC:
+(if false 19 (if true 36 7))
+EXPECTED:
+|ORACLE

@@ -1,0 +1,6 @@
+NAME: not
+DESCRIPTION: evaluate logic negation
+SRC:
+(not true)
+EXPECTED:
+|ORACLE

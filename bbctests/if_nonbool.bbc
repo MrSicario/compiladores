@@ -1,0 +1,7 @@
+NAME: if_nonbool
+DESCRIPTION: fails at evaluating a non boolean condition
+STATUS: RT error
+SRC:
+(if 7 12 16)
+EXPECTED:
+runtime type error

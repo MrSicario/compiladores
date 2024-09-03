@@ -1,0 +1,6 @@
+NAME: lessthan
+DESCRIPTION: a less-than operation
+SRC:
+(< 11 3)
+EXPECTED:
+|ORACLE

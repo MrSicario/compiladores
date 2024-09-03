@@ -1,0 +1,6 @@
+NAME: sub1
+DESCRIPTION: decrement a number
+SRC:
+(sub1 34)
+EXPECTED:
+|ORACLE

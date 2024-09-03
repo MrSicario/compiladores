@@ -1,0 +1,6 @@
+NAME: add
+DESCRIPTION: add two integers
+SRC:
+(+ 23 11)
+EXPECTED:
+|ORACLE

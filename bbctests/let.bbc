@@ -1,0 +1,6 @@
+NAME: let
+DESCRIPTION: a let binding
+SRC:
+(let (somevar 9) (add1 somevar))
+EXPECTED:
+|ORACLE

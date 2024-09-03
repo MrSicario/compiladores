@@ -1,0 +1,6 @@
+NAME: num_neg
+DESCRIPTION: evaluates a negative number
+SRC:
+-17
+EXPECTED:
+|ORACLE

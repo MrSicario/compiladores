@@ -1,0 +1,6 @@
+NAME: let_eval
+DESCRIPTION: a let binding to a non-literal expression
+SRC:
+(let (res (+ 23 17)) res)
+EXPECTED:
+|ORACLE

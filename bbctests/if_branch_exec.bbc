@@ -1,0 +1,7 @@
+NAME: if_branch_exec
+DESCRIPTION: a condition with a runtime invalid expression on the non-executing branch
+STATUS: No error
+SRC:
+(if false (and 2 3) 13)
+EXPECTED:
+13

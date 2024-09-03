@@ -1,0 +1,7 @@
+NAME: let_unknownid
+DESCRIPTION: a let binding with an unknown identifier
+STATUS: CT error
+SRC:
+(let (x 7) y)
+EXPECTED:
+.*unknown identifier.*
