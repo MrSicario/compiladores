@@ -2,7 +2,9 @@
 open Ast
 
 (** Values **)
-type value = NumV of int64 | BoolV of bool
+type value = 
+  | NumV of int64
+  | BoolV of bool
 
 (* Pretty printing *)
 let string_of_val(v : value) : string =

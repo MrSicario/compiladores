@@ -3,11 +3,13 @@ open Printf
 (* registers *)
 type reg = 
 | RAX
+| RSP
 
 (* arguments for instructions *)
 type arg =
 | Const of int64
 | Reg of reg
+| RegOffset of reg * int
 
 (* asm instructions *)
 type instruction =
@@ -18,11 +20,13 @@ type instruction =
 let pp_reg reg : string =
   match reg with
   | RAX -> "RAX"
+  | RSP -> "RSP"
 
 let pp_arg arg : string =
   match arg with
   | Const n -> sprintf "%#Lx" n
   | Reg r -> pp_reg r
+  | RegOffset (r, i) -> sprintf "[%s-%i]" (pp_reg r) (8 * i)
 
 let pp_instr instr : string =
   match instr with
