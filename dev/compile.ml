@@ -2,14 +2,11 @@ open Ast
 open Asm
 open Anf
 
+let bool_true = Int64.of_string "0x8000000000000001" (* 0x10...01 *)
+let bool_false = 1L (* 0x0...1 *)
+
 type env = (string * int) list
-
-type iflag =
-  | FRet
-  | FMov
-  | FAdd
-  | FCmp
-
+let empty_env = []
 let extend_env (name : string) (env : env) : (env * int) =
   let slot = 1 + (List.length env) in
   ((name, slot)::env, slot)
@@ -31,54 +28,71 @@ let rec compile_aexpr (expr : aexpr) (env : env) : instruction list =
 
 and compile_cexpr (expr : cexpr) (env : env) : instruction list =
   match expr with
-  | Atom i -> compile_immexpr i env FMov
-  | Prim1 (op, c) ->
-    begin
-      match op with
-      | Add1 -> 
-        (compile_cexpr c env) 
-        @ [ IAdd (Reg(RAX), Const(1L)) ]
-      | Sub1 -> 
-        (compile_cexpr c env) 
-        @ [ IAdd (Reg(RAX), Const(-1L)) ]
-    end
-  | Prim2 (op, i1, i2) ->
-    begin
-      match op with
-      | Add -> (compile_immexpr i1 env FMov) @ (compile_immexpr i2 env FAdd)
-      | _ -> failwith "TO BE DONE!"
-    end
+  | Atom i -> [ IMov (Reg RAX, arg_immexpr i env) ]
+  | Prim1 (op, c) -> (compile_cexpr c env) @ (match op with
+    | Add1 -> [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env) ]
+    | Sub1 -> [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env) ]
+    | Not -> [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] @ [ IXor (Reg(RAX), Reg(R10)) ])
+  | Prim2 (op, i1, i2) -> [ IMov (Reg RAX, arg_immexpr i1 env) ] @ (match op with
+    | Add -> [ IAdd (Reg RAX, arg_immexpr i2 env) ]
+    | And -> (and_imm i2 env)
+    | Or -> (or_imm i2 env)
+    | Lte -> (lte_imm i2 env))
+  | If (cond_expr, then_expr, else_expr) ->
+    let else_label = gensym "else" in
+    let done_label = gensym "done" in
+    [ IMov (Reg RAX, arg_immexpr cond_expr env) ]
+    @ [ ICmp (Reg RAX, Const (bool_false)) ]
+    @ [ IJe  (Label else_label) ]
+    @ (compile_cexpr then_expr env)
+    @ [ IJmp (Label done_label) ]
+    @ [ ILabel (Label else_label) ]
+    @ (compile_cexpr else_expr env)
+    @ [ ILabel (Label done_label)]
 
-and compile_immexpr (expr : immexpr) (env : env) (i : iflag) : instruction list =
-  match i with
-  | FRet -> [ IRet ]
-  | FMov ->
-    begin
-      match expr with
-      | Num n -> [ IMov (Reg RAX, Const n) ]
-      | Id x -> let slot = lookup x env in
-        [ IMov (Reg RAX, RegOffset (RSP, slot)) ]
-      | _ -> failwith "TBD"
-    end
-  | FAdd ->
-    begin
-      match expr with
-      | Num n -> [ IAdd (Reg RAX, Const n) ]
-      | Id x -> let slot = lookup x env in
-        [ IAdd (Reg RAX, RegOffset (RSP, slot)) ]
-      | _ -> failwith "TBD"
-    end
-  | FCmp ->
-    begin
-      match expr with
-      | Num n -> [ ICmp (Reg RAX, Const n)]
-      | Id x -> let slot = lookup x env in
-        [ ICmp (Reg RAX, RegOffset (RSP, slot)) ]
-      | _ -> failwith "TBD"
-    end
+and arg_immexpr (expr : immexpr) (env : env) : arg =
+  match expr with
+  | Num n -> Const (Int64.shift_left n 1)
+  | Bool true -> Const (bool_true)
+  | Bool false -> Const (bool_false)
+  | Id x -> RegOffset (RSP, lookup x env)
+
+and and_imm (expr : immexpr) (env : env) : instruction list =
+  let done_label = gensym "and" in
+  [ IMov (Reg R10, Const bool_false) ]
+  @ [ ICmp (Reg RAX, Reg R10) ]
+  @ [ IJe (Label done_label) ] (* if arg0 is false -> false *)
+  @ [ IMov (Reg RAX, arg_immexpr expr env) ]
+  @ [ ICmp (Reg RAX, Reg R10) ]
+  @ [ IJe (Label done_label) ] (* if arg1 is false -> false*)
+  @ [ IMov (Reg RAX, Const bool_true) ] (* else -> true *)
+  @ [ ILabel (Label done_label) ]
+
+and or_imm (expr : immexpr) (env : env) : instruction list =
+  let done_label = gensym "or" in
+  [ IMov (Reg R10, Const bool_true) ]
+  @ [ ICmp (Reg RAX, Reg R10) ]
+  @ [ IJe (Label done_label) ]
+  @ [ IMov (Reg R10, arg_immexpr expr env) ]
+  @ [ ICmp (Reg RAX, Reg R10) ]
+  @ [ IJe (Label done_label) ]
+  @ [ IMov (Reg RAX, Const bool_true) ]
+  @ [ ILabel (Label done_label) ]
+
+and lte_imm (expr : immexpr) (env : env) : instruction list =
+  let lte_label = gensym "lte" in
+  let done_label = gensym "ltedone" in
+  [ IMov (Reg R10, arg_immexpr expr env)]
+  @ [ ICmp (Reg RAX, Reg R10) ]
+  @ [ IJle (Label lte_label) ]
+  @ [ IMov (Reg RAX, Const bool_false) ]
+  @ [ IJmp (Label done_label)]
+  @ [ ILabel (Label lte_label) ]
+  @ [ IMov (Reg RAX, Const bool_true) ]
+  @ [ ILabel (Label done_label) ]
 
 let compile (e : expr) : string =
-  let instrs = compile_aexpr (anf e) [] in
+  let instrs = compile_aexpr (anf e) empty_env in
   let prelude ="
 section .text
 global our_code_starts_here

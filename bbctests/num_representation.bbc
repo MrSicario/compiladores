@@ -1,0 +1,6 @@
+NAME: num
+DESCRIPTION: evaluate one
+SRC:
+1
+EXPECTED:
+|ORACLE

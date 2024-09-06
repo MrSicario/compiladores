@@ -1,6 +1,6 @@
 NAME: and
 DESCRIPTION: a boolean conjunction
 SRC:
-(and true false)
+(and (and true true) (and false false))
 EXPECTED:
 |ORACLE

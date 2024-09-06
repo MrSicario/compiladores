@@ -1,0 +1,6 @@
+NAME: or_shortcircuit
+DESCRIPTION: control flow of "or" expression
+SRC:
+(or true (+ 9 1))
+EXPECTED:
+true

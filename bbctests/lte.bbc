@@ -1,0 +1,6 @@
+NAME: lte
+DESCRIPTION: numerical less-than-or-equal operator
+SRC:
+(<= 5 9)
+EXPECTED:
+|ORACLE

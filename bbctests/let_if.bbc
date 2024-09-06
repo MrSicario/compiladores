@@ -1,0 +1,6 @@
+NAME: let_if
+DESCRIPTION: bind a variable to a condition
+SRC:
+(let (x (if (<= 2 3) (+ 3 4) (+ 11 2))) (let (y (if (<= 9 1) (+ 9 2) (+ 8 4))) (+ x y)))
+EXPECTED:
+|ORACLE

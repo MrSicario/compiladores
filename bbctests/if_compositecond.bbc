@@ -1,0 +1,6 @@
+NAME: if_compositecond
+DESCRIPTION: evaluate an if with a non-literal condition
+SRC:
+(if (<= 3 5) 9 21)
+EXPECTED:
+|ORACLE

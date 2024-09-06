@@ -9,6 +9,7 @@ and cexpr =
   | Atom of immexpr
   | Prim1 of prim1 * cexpr
   | Prim2 of prim2 * immexpr * immexpr
+  | If of immexpr * cexpr * cexpr
 
 and immexpr =
   | Num of int64
@@ -50,7 +51,11 @@ let rec anf (expr : expr) : aexpr =
     let scram_id = gensym id in
     anf_imm bound_expr (fun imm_expr ->
       Let (scram_id, Atom imm_expr, anf (scram body_expr id scram_id)))
-  | _ -> failwith "Not yet implemented" 
+  | If (cond_expr, t_expr, f_expr) ->
+    anf_imm cond_expr (fun imm_expr ->
+      anf_c t_expr (fun c_expr1 ->
+        anf_c f_expr (fun c_expr2 ->
+          Ret (If (imm_expr, c_expr1, c_expr2)))))
       
 and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   match expr with
@@ -70,7 +75,12 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
     let scram_id = gensym id in
     anf_imm bound_expr (fun imm_expr ->
       Let (scram_id, Atom imm_expr, anf_imm (scram body_expr id scram_id) (fun imm_expr -> k imm_expr)))
-  | _ -> failwith "Not yet implemented"
+  | If (cond_expr, then_expr, else_expr) ->
+    let tmp = gensym "if" in
+    anf_imm cond_expr (fun imm_expr ->
+      anf_c then_expr (fun c_expr1 ->
+        anf_c else_expr (fun c_expr2 ->
+          Let (tmp, If (imm_expr, c_expr1, c_expr2), k (Id tmp)))))
 
 and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
   match expr with
@@ -88,7 +98,11 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
     let scram_id = gensym id in
     anf_c bound_expr (fun c_expr ->
       Let (scram_id, c_expr, anf_c (scram body_expr id scram_id) (fun c_expr -> k c_expr)))
-  | _ -> failwith "Not yet implemented"
+  | If (cond_expr, then_expr, else_expr) ->
+    anf_imm cond_expr (fun imm_expr ->
+      anf_c then_expr (fun c_expr1 ->
+        anf_c else_expr (fun c_expr2 ->
+          k (If (imm_expr, c_expr1, c_expr2)))))
 
 let rec string_of_aexpr (a : aexpr) : string =
   match a with
@@ -103,12 +117,15 @@ and string_of_cexpr (c : cexpr) : string =
   | Prim1 (op, c) -> sprintf "(%s %s)"
     (match op with
     | Add1 -> "add1"
-    | Sub1 -> "sub1") (string_of_cexpr c)
+    | Sub1 -> "sub1"
+    | Not -> "not") (string_of_cexpr c)
   | Prim2 (op, i1, i2) -> sprintf "(%s %s %s)"
     (match op with
     | Add -> "+"
     | And -> "and"
+    | Or -> "or"
     | Lte -> "<=") (string_of_immexpr i1) (string_of_immexpr i2)
+  | If (icond, cthen, celse) -> sprintf "(if %s %s %s)" (string_of_immexpr icond) (string_of_cexpr cthen) (string_of_cexpr celse)
 
 and string_of_immexpr (i : immexpr) : string =
   match i with

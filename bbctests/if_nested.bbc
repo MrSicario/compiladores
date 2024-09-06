@@ -1,0 +1,6 @@
+NAME: if_nested
+DESCRIPTION: evaluate nested conditions
+SRC:
+(if (<= 3 5) (if false 2 3) 9)
+EXPECTED:
+|ORACLE

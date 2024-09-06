@@ -1,0 +1,6 @@
+NAME: or
+DESCRIPTION: a boolean disjunction
+SRC:
+(or (or false false) (or false true))
+EXPECTED:
+|ORACLE

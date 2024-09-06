@@ -12,6 +12,12 @@ let string_of_val(v : value) : string =
   | NumV n -> Int64.to_string n
   | BoolV b -> if b then "true" else "false"
 
+let liftBB : (bool -> bool) -> value -> value =
+  fun op e1 ->
+    match e1 with
+    | BoolV b1 -> BoolV (op b1)
+    | _ -> failwith "runtime type error"
+
 (* Lifting functions on OCaml primitive types to operate on language values *)
 let liftIII : (int64 -> int64 -> int64) -> value -> value -> value =
   fun op e1 e2 ->
@@ -43,14 +49,16 @@ let rec interp expr env =
   | Id x -> List.assoc x env
   | Num n -> NumV n
   | Bool b -> BoolV b
-  | Prim1 (op, e) -> 
-    (match op with
-    | Add1 -> liftIII ( Int64.add )
-    | Sub1 -> liftIII ( Int64.sub )) (interp e env) (NumV 1L)
+  | Prim1 (op, e) -> begin match op with
+    | Add1 -> liftIII ( Int64.add ) (interp e env) (NumV 1L)
+    | Sub1 -> liftIII ( Int64.sub ) (interp e env) (NumV 1L)
+    | Not -> liftBB ( Bool.not ) (interp e env)
+    end
   | Prim2 (op, e1, e2) -> 
     (match op with
     | Add -> liftIII ( Int64.add ) 
     | And -> liftBBB ( && ) 
+    | Or -> liftBBB ( || )
     | Lte -> liftIIB ( <= )) (interp e1 env) (interp e2 env)
   | Let (x, e , b) -> interp b (extend_env x (interp e env) env)
   | If (e1, e2, e3) -> 
