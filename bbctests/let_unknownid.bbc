@@ -4,4 +4,4 @@ STATUS: CT error
 SRC:
 (let (x 7) y)
 EXPECTED:
-.*unknown identifier.*
+.*\(U\|u\)nknown identifier.*
