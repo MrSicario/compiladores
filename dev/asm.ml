@@ -16,6 +16,7 @@ type instruction =
 | IRet
 | IMov of arg * arg
 | IAdd of arg * arg
+| ICmp of arg * arg
 (* TO BE COMPLETED *)
 
 let pp_reg reg : string =
@@ -34,6 +35,7 @@ let pp_instr instr : string =
   | IRet -> "  ret" 
   | IMov (a1, a2) -> sprintf "  mov %s, %s" (pp_arg a1) (pp_arg a2)
   | IAdd (a1, a2) -> sprintf "  add %s, %s" (pp_arg a1) (pp_arg a2)
+  | ICmp (a1, a2) -> sprintf "  cmp %s, %s" (pp_arg a1) (pp_arg a2)
   (* TO BE COMPLETED *)
 
 let pp_instrs (instrs : instruction list) : string =

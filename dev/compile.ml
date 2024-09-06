@@ -3,6 +3,13 @@ open Asm
 open Anf
 
 type env = (string * int) list
+
+type iflag =
+  | FRet
+  | FMov
+  | FAdd
+  | FCmp
+
 let extend_env (name : string) (env : env) : (env * int) =
   let slot = 1 + (List.length env) in
   ((name, slot)::env, slot)
@@ -12,27 +19,6 @@ let rec lookup (name : string) (env : env) : int =
   | [] -> failwith (Printf.sprintf "Unknown identifier '%s'" name)
   | (n, i)::tail ->
     if n = name then i else (lookup name tail)
-
-(* DEPRECATED - Usar compile_aexpr
-let rec compile_expr (expr : expr) (env : env) : instruction list =
-  match expr with 
-  | Num n -> [ IMov (Reg RAX, Const n) ]
-  | Id x -> 
-    let slot = lookup x env in
-    [ IMov (Reg(RAX), (RegOffset (RSP, slot))) ]
-  | Prim1 (op, e) ->
-    begin
-      match op with
-      | Add1 -> (compile_expr e env) @ [ IAdd (Reg(RAX), Const(1L)) ]
-      | Sub1 -> (compile_expr e env) @ [ IAdd (Reg(RAX), Const(-1L)) ]
-    end
-  | Let (id, e, b) ->
-    let (env', slot) = extend_env id env in
-    (compile_expr e env)
-    @ [ IMov (RegOffset (RSP, slot), Reg (RAX)) ]
-    @ (compile_expr b env')
-  | _ -> failwith "TO BE DONE!"
-*)
 
 let rec compile_aexpr (expr : aexpr) (env : env) : instruction list =
   match expr with
@@ -45,7 +31,7 @@ let rec compile_aexpr (expr : aexpr) (env : env) : instruction list =
 
 and compile_cexpr (expr : cexpr) (env : env) : instruction list =
   match expr with
-  | Atom i -> move_immexpr i env
+  | Atom i -> compile_immexpr i env FMov
   | Prim1 (op, c) ->
     begin
       match op with
@@ -59,25 +45,37 @@ and compile_cexpr (expr : cexpr) (env : env) : instruction list =
   | Prim2 (op, i1, i2) ->
     begin
       match op with
-      | Add -> (move_immexpr i1 env) @ (add_immexpr i2 env)
+      | Add -> (compile_immexpr i1 env FMov) @ (compile_immexpr i2 env FAdd)
       | _ -> failwith "TO BE DONE!"
     end
 
-and move_immexpr (expr : immexpr) (env : env) : instruction list =
-  match expr with
-  | Num n -> [ IMov (Reg RAX, Const n) ]
-  | Id x ->
-    let slot = lookup x env in
-    [ IMov (Reg RAX, RegOffset (RSP, slot)) ]
-  | _ -> failwith "TBD"
-
-and add_immexpr (expr : immexpr) (env : env) : instruction list =
-  match expr with
-  | Num n -> [ IAdd (Reg RAX, Const n) ]
-  | Id x ->
-    let slot = lookup x env in
-    [ IAdd (Reg RAX, RegOffset (RSP, slot)) ]
-  | _ -> failwith "TBD"
+and compile_immexpr (expr : immexpr) (env : env) (i : iflag) : instruction list =
+  match i with
+  | FRet -> [ IRet ]
+  | FMov ->
+    begin
+      match expr with
+      | Num n -> [ IMov (Reg RAX, Const n) ]
+      | Id x -> let slot = lookup x env in
+        [ IMov (Reg RAX, RegOffset (RSP, slot)) ]
+      | _ -> failwith "TBD"
+    end
+  | FAdd ->
+    begin
+      match expr with
+      | Num n -> [ IAdd (Reg RAX, Const n) ]
+      | Id x -> let slot = lookup x env in
+        [ IAdd (Reg RAX, RegOffset (RSP, slot)) ]
+      | _ -> failwith "TBD"
+    end
+  | FCmp ->
+    begin
+      match expr with
+      | Num n -> [ ICmp (Reg RAX, Const n)]
+      | Id x -> let slot = lookup x env in
+        [ ICmp (Reg RAX, RegOffset (RSP, slot)) ]
+      | _ -> failwith "TBD"
+    end
 
 let compile (e : expr) : string =
   let instrs = compile_aexpr (anf e) [] in
