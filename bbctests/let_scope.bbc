@@ -4,4 +4,4 @@ STATUS: CT error
 SRC:
 (+ (let (m 4) m) m)
 EXPECTED:
-.*unknown identifier.*
+.*\(U\|u\)nknown identifier.*

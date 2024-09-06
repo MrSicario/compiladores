@@ -1,7 +1,6 @@
 open Ast
 open Asm
 open Anf
-open Printf
 
 type env = (string * int) list
 let extend_env (name : string) (env : env) : (env * int) =
@@ -10,11 +9,11 @@ let extend_env (name : string) (env : env) : (env * int) =
 
 let rec lookup (name : string) (env : env) : int =
   match env with
-  | [] -> failwith (sprintf "Identifier %s not in environment." name)
+  | [] -> failwith (Printf.sprintf "Unknown identifier '%s'" name)
   | (n, i)::tail ->
     if n = name then i else (lookup name tail)
 
-(* DEPRECATED - Usar compile_aexpr*)
+(* DEPRECATED - Usar compile_aexpr
 let rec compile_expr (expr : expr) (env : env) : instruction list =
   match expr with 
   | Num n -> [ IMov (Reg RAX, Const n) ]
@@ -33,6 +32,7 @@ let rec compile_expr (expr : expr) (env : env) : instruction list =
     @ [ IMov (RegOffset (RSP, slot), Reg (RAX)) ]
     @ (compile_expr b env')
   | _ -> failwith "TO BE DONE!"
+*)
 
 let rec compile_aexpr (expr : aexpr) (env : env) : instruction list =
   match expr with
