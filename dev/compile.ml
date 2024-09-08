@@ -29,15 +29,23 @@ let rec compile_aexpr (expr : aexpr) (env : env) : instruction list =
 and compile_cexpr (expr : cexpr) (env : env) : instruction list =
   match expr with
   | Atom i -> [ IMov (Reg RAX, arg_immexpr i env) ]
-  | Prim1 (op, c) -> (compile_cexpr c env) @ (match op with
-    | Add1 -> [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env) ]
-    | Sub1 -> [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env) ]
-    | Not -> [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] @ [ IXor (Reg(RAX), Reg(R10)) ])
-  | Prim2 (op, i1, i2) -> [ IMov (Reg RAX, arg_immexpr i1 env) ] @ (match op with
-    | Add -> [ IAdd (Reg RAX, arg_immexpr i2 env) ]
-    | And -> (and_imm i2 env)
-    | Or -> (or_imm i2 env)
-    | Lte -> (lte_imm i2 env))
+  | Prim1 (op, c) -> 
+    let head = compile_cexpr c env in
+    begin match op with
+    | Add1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env) ]
+    | Sub1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env) ]
+    | Not -> 
+      head 
+      @ [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] 
+      @ [ IXor (Reg(RAX), Reg(R10)) ]
+    end
+  | Prim2 (op, i1, i2) -> let head = [ IMov (Reg RAX, arg_immexpr i1 env) ] in
+    begin match op with
+    | Add -> head @ [ IAdd (Reg RAX, arg_immexpr i2 env) ]
+    | And -> head @ (and_immexpr i2 env)
+    | Or -> head @ (or_immexpr i2 env)
+    | Lte -> head @ (lte_immexpr i2 env)
+    end
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = gensym "else" in
     let done_label = gensym "done" in
@@ -57,7 +65,7 @@ and arg_immexpr (expr : immexpr) (env : env) : arg =
   | Bool false -> Const (bool_false)
   | Id x -> RegOffset (RSP, lookup x env)
 
-and and_imm (expr : immexpr) (env : env) : instruction list =
+and and_immexpr (expr : immexpr) (env : env) : instruction list =
   let done_label = gensym "and" in
   [ IMov (Reg R10, Const bool_false) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
@@ -68,7 +76,7 @@ and and_imm (expr : immexpr) (env : env) : instruction list =
   @ [ IMov (Reg RAX, Const bool_true) ] (* else -> true *)
   @ [ ILabel (Label done_label) ]
 
-and or_imm (expr : immexpr) (env : env) : instruction list =
+and or_immexpr (expr : immexpr) (env : env) : instruction list =
   let done_label = gensym "or" in
   [ IMov (Reg R10, Const bool_true) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
@@ -79,7 +87,7 @@ and or_imm (expr : immexpr) (env : env) : instruction list =
   @ [ IMov (Reg RAX, Const bool_true) ]
   @ [ ILabel (Label done_label) ]
 
-and lte_imm (expr : immexpr) (env : env) : instruction list =
+and lte_immexpr (expr : immexpr) (env : env) : instruction list =
   let lte_label = gensym "lte" in
   let done_label = gensym "ltedone" in
   [ IMov (Reg R10, arg_immexpr expr env)]

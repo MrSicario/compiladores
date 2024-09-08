@@ -1,6 +1,8 @@
 open Printf
 open Ast
 
+(* ANF representation library *)
+
 type aexpr =
   | Let of string * cexpr * aexpr
   | Ret of cexpr
@@ -18,10 +20,13 @@ and immexpr =
 
 let gensym : string -> string =
   let count = ref 0 in
-  fun base: string ->
+  fun (base : string) : string ->
     count := !count + 1;
     sprintf "tmp_%s_%d" base !count
 
+(* TODO:
+Reemplazar por una fase discreta de alpha-masking en lugar de realizar la operación
+durante la transformación *)
 let rec scram (expr : expr) (old_bind : string) (new_bind : string) : expr =
   match expr with
   | Num n -> Num n
@@ -125,7 +130,10 @@ and string_of_cexpr (c : cexpr) : string =
     | And -> "and"
     | Or -> "or"
     | Lte -> "<=") (string_of_immexpr i1) (string_of_immexpr i2)
-  | If (icond, cthen, celse) -> sprintf "(if %s %s %s)" (string_of_immexpr icond) (string_of_cexpr cthen) (string_of_cexpr celse)
+  | If (icond, cthen, celse) -> sprintf "(if %s %s %s)" 
+    (string_of_immexpr icond) 
+    (string_of_cexpr cthen)
+    (string_of_cexpr celse)
 
 and string_of_immexpr (i : immexpr) : string =
   match i with
