@@ -1,6 +1,7 @@
 open Ast
 open Asm
 open Anf
+open Gensym
 
 let bool_true = Int64.of_string "0x8000000000000001" (* 0x10...01 *)
 let bool_false = 1L (* 0x0...1 *)
@@ -47,8 +48,8 @@ and compile_cexpr (expr : cexpr) (env : env) : instruction list =
     | Lte -> head @ (lte_immexpr i2 env)
     end
   | If (cond_expr, then_expr, else_expr) ->
-    let else_label = gensym "else" in
-    let done_label = gensym "done" in
+    let else_label = Gensym.fresh "else" in
+    let done_label = Gensym.fresh "done" in
     [ IMov (Reg RAX, arg_immexpr cond_expr env) ]
     @ [ ICmp (Reg RAX, Const (bool_false)) ]
     @ [ IJe  (Label else_label) ]
@@ -66,7 +67,7 @@ and arg_immexpr (expr : immexpr) (env : env) : arg =
   | Id x -> RegOffset (RSP, lookup x env)
 
 and and_immexpr (expr : immexpr) (env : env) : instruction list =
-  let done_label = gensym "and" in
+  let done_label = Gensym.fresh "and" in
   [ IMov (Reg R10, Const bool_false) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJe (Label done_label) ] (* if arg0 is false -> false *)
@@ -77,7 +78,7 @@ and and_immexpr (expr : immexpr) (env : env) : instruction list =
   @ [ ILabel (Label done_label) ]
 
 and or_immexpr (expr : immexpr) (env : env) : instruction list =
-  let done_label = gensym "or" in
+  let done_label = Gensym.fresh "or" in
   [ IMov (Reg R10, Const bool_true) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJe (Label done_label) ]
@@ -88,8 +89,8 @@ and or_immexpr (expr : immexpr) (env : env) : instruction list =
   @ [ ILabel (Label done_label) ]
 
 and lte_immexpr (expr : immexpr) (env : env) : instruction list =
-  let lte_label = gensym "lte" in
-  let done_label = gensym "ltedone" in
+  let lte_label = Gensym.fresh "lte" in
+  let done_label = Gensym.fresh "ltedone" in
   [ IMov (Reg R10, arg_immexpr expr env)]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJle (Label lte_label) ]

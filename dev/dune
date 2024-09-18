@@ -1,4 +1,12 @@
 (library
  (name dev)
- (modules anf ast asm parse interp compile)
+ (modules 
+  anf 
+  ast 
+  asm 
+  parse 
+  interp 
+  compile
+  gensym
+ )
  (libraries containers))
