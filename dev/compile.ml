@@ -39,6 +39,7 @@ and compile_cexpr (expr : cexpr) (env : env) : instruction list =
       head 
       @ [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] 
       @ [ IXor (Reg(RAX), Reg(R10)) ]
+    | Print -> failwith "To Be Done"
     end
   | Prim2 (op, i1, i2) -> let head = [ IMov (Reg RAX, arg_immexpr i1 env) ] in
     begin match op with

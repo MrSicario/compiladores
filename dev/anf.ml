@@ -37,6 +37,7 @@ let rec anf_aexpr (expr : expr) : aexpr =
       anf_c t_expr (fun c_expr1 ->
         anf_c f_expr (fun c_expr2 ->
           Ret (If (imm_expr, c_expr1, c_expr2)))))
+  | Apply (_, _) -> failwith "To Be Done"
       
 and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   match expr with
@@ -61,6 +62,7 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
       anf_c then_expr (fun c_expr1 ->
         anf_c else_expr (fun c_expr2 ->
           Let (tmp, If (imm_expr, c_expr1, c_expr2), k (Id tmp)))))
+  | Apply (_, _) -> failwith "To Be Done"
           
 and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
   match expr with
@@ -82,6 +84,7 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
       anf_c then_expr (fun c_expr1 ->
         anf_c else_expr (fun c_expr2 ->
           k (If (imm_expr, c_expr1, c_expr2)))))
+  | Apply (_, _) -> failwith "To Be Done"
           
 let rec string_of_aexpr (a : aexpr) : string =
   match a with
@@ -97,7 +100,8 @@ and string_of_cexpr (c : cexpr) : string =
     (match op with
     | Add1 -> "add1"
     | Sub1 -> "sub1"
-    | Not -> "not") (string_of_cexpr c)
+    | Not -> "not"
+    | Print -> "print") (string_of_cexpr c)
   | Prim2 (op, i1, i2) -> sprintf "(%s %s %s)"
     (match op with
     | Add -> "+"

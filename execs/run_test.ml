@@ -191,12 +191,12 @@ let test_interp_compound () =
 
 let test_interp_let () =
   check value "same int"
-    (interp (Let ("a", Num 9L, Prim1 (Sub1, Id "a"))) empty_env)
+    (interp (Let ("a", Num 9L, Prim1 (Sub1, Id "a"))) empty_env [])
     (NumV 8L)
 
 let test_interp_let_nested () =
   check value "same int"
-    (interp (Let ("x", Prim1 (Add1, Num 3L), Let ("y", Num 14L, Prim2 (Add, Id "x", Id "y")))) empty_env)
+    (interp (Let ("x", Prim1 (Add1, Num 3L), Let ("y", Num 14L, Prim2 (Add, Id "x", Id "y")))) empty_env [])
     (NumV 18L)
 
 (* todo: a better error message for unknown identifiers *)
@@ -204,22 +204,22 @@ let test_interp_let_unknownid () =
   let sexp = (Let ("x", Num 3L, Id "y")) in
   check_raises "Should raise Not_found"
     (Not_found)
-    (fun () -> ignore @@ (interp sexp empty_env))
+    (fun () -> ignore @@ (interp sexp empty_env []))
 
 let test_interp_if () =
   check value "same int"
-    (interp (If (Prim2 (And, Bool true, Bool false), Num 3L, Num 22L)) empty_env)
+    (interp (If (Prim2 (And, Bool true, Bool false), Num 3L, Num 22L)) empty_env [])
     (NumV 22L)
 
 let test_interp_if_error () =
   let sexp = (If (Num 3L, Num 7L, Num 11L)) in
   check_raises "Should raise runtime type error"
     (Failure "runtime type error")
-    (fun () -> ignore @@ (interp sexp empty_env))
+    (fun () -> ignore @@ (interp sexp empty_env []))
 
 let test_interp_if_brancheval () =
   check value "same int"
-    (interp (If (Bool true, Num 6L, Prim2 (And, Num 2L, Num 5L))) empty_env)
+    (interp (If (Bool true, Num 6L, Prim2 (And, Num 2L, Num 5L))) empty_env [])
     (NumV 6L)
 
 let lazy_and () =
