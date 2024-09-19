@@ -100,7 +100,8 @@ and lte_immexpr (expr : immexpr) (env : env) : instruction list =
   @ [ IMov (Reg RAX, Const bool_true) ]
   @ [ ILabel (Label done_label) ]
 
-let compile (e : expr) : string =
+let compile_prog (p : prog) : string =
+  let _, e = p in
   let instrs = compile_aexpr (anf e) empty_env in
   let prelude ="
 section .text
