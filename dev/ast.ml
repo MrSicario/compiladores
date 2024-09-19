@@ -63,10 +63,10 @@ let rec string_of_expr(e : expr) : string =
 
 (* Pretty printing C types - used by testing framework *)
 let string_of_ctype(t : ctype) : string =
-match t with
-| CAny -> "any"
-| CInt -> "int"
-| CBool -> "bool"
+  match t with
+  | CAny -> "any"
+  | CInt -> "int"
+  | CBool -> "bool"
 
 (* Pretty printing function definitions - used by testing framework *)
 let string_of_fundef(d : fundef) : string =

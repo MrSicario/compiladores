@@ -32,4 +32,4 @@ let rec  alpha_rename_expr expr env =
       let x' = Gensym.fresh x in
       let env' = Env.add x x' env in
       Let (x', alpha_rename_expr e1 env, alpha_rename_expr e2 env')
-  | _ -> failwith "To be done"
+  | Apply (_, _) -> failwith "To be done"

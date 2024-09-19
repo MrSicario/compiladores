@@ -85,7 +85,11 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
         anf_c else_expr (fun c_expr2 ->
           k (If (imm_expr, c_expr1, c_expr2)))))
   | Apply (_, _) -> failwith "To Be Done"
-          
+     
+let anf (expr : expr) : aexpr =
+  let masked_expr = alpha_rename_expr expr Env.empty in
+    anf_aexpr masked_expr
+
 let rec string_of_aexpr (a : aexpr) : string =
   match a with
   | Let (id, c, a) -> 
@@ -118,7 +122,3 @@ and string_of_immexpr (i : immexpr) : string =
   | Num n -> Int64.to_string n
   | Bool b -> if b then "true" else "false"
   | Id s -> s
-  
-  let anf (expr : expr) : aexpr =
-    let masked_expr = alpha_rename_expr expr Env.empty in
-      anf_aexpr masked_expr

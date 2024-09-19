@@ -19,22 +19,23 @@ match v with
 (* Type checks *)
 let raise_type_error (expected_type_s : string) (ill_value : value) : 'a =
   raise (RTError (sprintf "Type error: Expected %s but got %s" expected_type_s (string_of_val ill_value)))
+  
+(* Lifting functions on OCaml primitive types to operate on language values
+   They throw a runtime type error if any of the received arguments is ill-typed,
+   reporting the first infringing value (from left to right) if there are multiple.
+*)
+
+let bool_of_value (v : value) : bool =
+  match v with
+  | BoolV b -> b
+  | _ -> raise_type_error "boolean" v
 
 let liftBB : (bool -> bool) -> value -> value =
   fun op e ->
     match e with
     | BoolV b -> BoolV (op b)
     | _ -> raise_type_error "boolean" e
-  
-let bool_of_value (v : value) : bool =
-  match v with
-  | BoolV b -> b
-  | _ -> raise_type_error "boolean" v
 
-(* Lifting functions on OCaml primitive types to operate on language values
-   They throw a runtime type error if any of the received arguments is ill-typed,
-   reporting the first infringing value (from left to right) if there are multiple.
-*)
 let liftIII : (int64 -> int64 -> int64) -> value -> value -> value =
   fun op e1 e2 ->
     match e1, e2 with
