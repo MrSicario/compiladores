@@ -15,18 +15,18 @@ let extend_env (name : string) (env : env) : (env * int) =
   ((name, slot)::env, slot)
 let rec lookup_env (name : string) (env : env) : int =
   match env with
-  | [] -> raise (CTError (Printf.sprintf "Unbound identifier: %s" name))
+  | [] -> raise (CTError (Printf.sprintf "Free identifier: %s" name))
   | (n, i)::tail ->
     if n = name then i else (lookup_env name tail)
 
 (* Function Environment *)
-type fenv = fundef list
+type fenv = afundef list
 let empty_fenv : fenv = []
-let rec lookup_fenv : string -> fenv -> fundef =
+let rec lookup_fenv : string -> fenv -> afundef =
   fun s fenv -> 
     match fenv with
     | [] -> raise (CTError (Printf.sprintf "Undefined function: %s" s))
-    | (f::fs) -> if fundef_name f = s then f else lookup_fenv s fs
+    | (f::fs) -> if afundef_name f = s then f else lookup_fenv s fs
 
 (* Compiler *)
 let rec compile_aexpr (expr : aexpr) (env : env) (fenv : fenv) : instruction list =
@@ -71,6 +71,7 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : fenv) : instruction list =
     @ [ ILabel (Label else_label) ]
     @ (compile_cexpr else_expr env fenv)
     @ [ ILabel (Label done_label)]
+  | Apply (_, _) -> failwith "Compile Apply: To Be Done"
 
 and arg_immexpr (expr : immexpr) (env : env) (_ : fenv) : arg =
   match expr with
@@ -114,8 +115,8 @@ and lte_immexpr (expr : immexpr) (env : env) (_ : fenv) : instruction list =
   @ [ ILabel (Label done_label) ]
 
 let compile_prog (p : prog) : string =
-  let _, e = p in
-  let instrs = compile_aexpr (anf e) empty_env empty_fenv in
+  let f, e = p in
+  let instrs = compile_aexpr (anf_expr e) empty_env (List.map anf_fundef f) in
   let prelude ="
 section .text
 global our_code_starts_here

@@ -1,5 +1,6 @@
 open Printf
 open Ast
+open Parse
 
 module Gensym = struct
   let counter = ref 0
@@ -11,13 +12,24 @@ module Gensym = struct
     sprintf "$%s%d" s id
 end
 
+(* Lexical Environment *)
 module Env = Map.Make (String)
+
+let rec gen_env l name env =
+  match l with
+  | [] -> env
+  | id :: tail ->
+    let id' = Gensym.fresh name ^ "_" ^ id in
+    gen_env tail name (Env.add id id' env)
 
 let rec  alpha_rename_expr expr env =
   match expr with
-  | Id x -> begin match Env.find_opt x env with
-            | Some x_new -> Id x_new
-            | None -> failwith (sprintf "Free identifier: %s" x) end
+  | Id x -> 
+    begin
+      match Env.find_opt x env with
+      | Some x_new -> Id x_new
+      | None -> raise (CTError (sprintf "Free identifier: %s" x))
+    end
   | Num _ -> expr
   | Bool _ -> expr
   | Prim1 (op, e) -> Prim1 (op, alpha_rename_expr e env)
@@ -27,9 +39,10 @@ let rec  alpha_rename_expr expr env =
       If
         ( alpha_rename_expr e1 env,
           alpha_rename_expr e2 env,
-          alpha_rename_expr e3 env )
+          alpha_rename_expr e3 env)
   | Let (x, e1, e2) ->
       let x' = Gensym.fresh x in
       let env' = Env.add x x' env in
       Let (x', alpha_rename_expr e1 env, alpha_rename_expr e2 env')
-  | Apply (_, _) -> failwith "To be done"
+  | Apply (f, expr_list) -> 
+      Apply (f, List.map (fun e -> alpha_rename_expr e env) expr_list)
