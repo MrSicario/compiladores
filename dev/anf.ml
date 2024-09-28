@@ -128,37 +128,37 @@ let anf_fundef (f : fundef) : afundef =
   match f with
   | DefSys (n, l, r) -> DefSys (n, l, r)
   | DefFun (n, l, e) ->
-    let env = gen_env l n Env.empty in
+    let l', env = gen_env l n in
     let masked_expr = alpha_rename_expr e env in
-    DefFun (n, l, anf_aexpr masked_expr)
+    DefFun (n, l', anf_aexpr masked_expr)
 
 let rec string_of_aexpr (a : aexpr) : string =
   match a with
   | Let (id, c, a) -> 
-    sprintf "let %s = %s in\n%s" 
+    sprintf "(let (%s %s) %s)" 
     id (string_of_cexpr c) (string_of_aexpr a)
-  | Ret c -> sprintf "ret %s" (string_of_cexpr c)
+  | Ret c -> sprintf "(ret %s)" (string_of_cexpr c)
 
 and string_of_cexpr (c : cexpr) : string =
   match c with
   | Atom i -> string_of_immexpr i
-  | Prim1 (op, c) -> sprintf "%s %s"
+  | Prim1 (op, c) -> sprintf "(%s %s)"
     (match op with
     | Add1 -> "add1"
     | Sub1 -> "sub1"
     | Not -> "not"
     | Print -> "print") (string_of_cexpr c)
-  | Prim2 (op, i1, i2) -> sprintf "%s %s %s"
+  | Prim2 (op, i1, i2) -> sprintf "(%s %s %s)"
     (match op with
     | Add -> "+"
     | And -> "and"
     | Or -> "or"
     | Lte -> "<=") (string_of_immexpr i1) (string_of_immexpr i2)
-  | If (icond, cthen, celse) -> sprintf "if %s %s %s" 
+  | If (icond, cthen, celse) -> sprintf "(if %s %s %s)" 
     (string_of_immexpr icond) 
     (string_of_cexpr cthen)
     (string_of_cexpr celse)
-  | Apply (name, args) -> sprintf "%s (%s)"
+  | Apply (name, args) -> sprintf "(%s (%s))"
     name
     (String.concat " " (List.map string_of_immexpr args))
 

@@ -2,11 +2,12 @@
  (name dev)
  (modules 
   anf 
-  ast 
   asm 
-  parse 
-  interp 
+  ast
+  checks
   compile
   gensym
+  interp 
+  parse 
  )
  (libraries containers))

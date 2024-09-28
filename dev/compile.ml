@@ -3,6 +3,7 @@ open Asm
 open Anf
 open Gensym
 open Parse
+open Checks
 
 let bool_true = Int64.of_string "0x8000000000000001" (* 0x10...01 *)
 let bool_false = 1L (* 0x0...1 *)
@@ -20,16 +21,16 @@ let rec lookup_env (name : string) (env : env) : int =
     if n = name then i else (lookup_env name tail)
 
 (* Function Environment *)
-type fenv = afundef list
-let empty_fenv : fenv = []
-let rec lookup_fenv : string -> fenv -> afundef =
+type afenv = afundef list
+let empty_afenv : afenv = []
+let rec lookup_afenv : string -> afenv -> afundef =
   fun s fenv -> 
     match fenv with
     | [] -> raise (CTError (Printf.sprintf "Undefined function: %s" s))
-    | (f::fs) -> if afundef_name f = s then f else lookup_fenv s fs
+    | (f::fs) -> if afundef_name f = s then f else lookup_afenv s fs
 
 (* Compiler *)
-let rec compile_aexpr (expr : aexpr) (env : env) (fenv : fenv) : instruction list =
+let rec compile_aexpr (expr : aexpr) (env : env) (fenv : afenv) : instruction list =
   match expr with
   | Let (id, c, a) ->
     let (env', slot) = extend_env id env in
@@ -38,14 +39,14 @@ let rec compile_aexpr (expr : aexpr) (env : env) (fenv : fenv) : instruction lis
     @ (compile_aexpr a env' fenv)
   | Ret c -> compile_cexpr c env fenv
 
-and compile_cexpr (expr : cexpr) (env : env) (fenv : fenv) : instruction list =
+and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
   match expr with
-  | Atom i -> [ IMov (Reg RAX, arg_immexpr i env empty_fenv) ]
+  | Atom i -> [ IMov (Reg RAX, arg_immexpr i env empty_afenv) ]
   | Prim1 (op, c) -> 
     let head = compile_cexpr c env fenv in
     begin match op with
-    | Add1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env empty_fenv) ]
-    | Sub1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env empty_fenv) ]
+    | Add1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env empty_afenv) ]
+    | Sub1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env empty_afenv) ]
     | Not -> 
       head 
       @ [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] 
@@ -53,17 +54,17 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : fenv) : instruction list =
     | Print -> failwith "To Be Done"
     end
   | Prim2 (op, i1, i2) -> 
-    let head = [ IMov (Reg RAX, arg_immexpr i1 env empty_fenv) ] in
+    let head = [ IMov (Reg RAX, arg_immexpr i1 env empty_afenv) ] in
     begin match op with
-    | Add -> head @ [ IAdd (Reg RAX, arg_immexpr i2 env empty_fenv) ]
-    | And -> head @ (and_immexpr i2 env empty_fenv)
-    | Or -> head @ (or_immexpr i2 env empty_fenv)
-    | Lte -> head @ (lte_immexpr i2 env empty_fenv)
+    | Add -> head @ [ IAdd (Reg RAX, arg_immexpr i2 env empty_afenv) ]
+    | And -> head @ (and_immexpr i2 env empty_afenv)
+    | Or -> head @ (or_immexpr i2 env empty_afenv)
+    | Lte -> head @ (lte_immexpr i2 env empty_afenv)
     end
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = Gensym.fresh "else" in
     let done_label = Gensym.fresh "done" in
-    [ IMov (Reg RAX, arg_immexpr cond_expr env empty_fenv) ]
+    [ IMov (Reg RAX, arg_immexpr cond_expr env empty_afenv) ]
     @ [ ICmp (Reg RAX, Const (bool_false)) ]
     @ [ IJe  (Label else_label) ]
     @ (compile_cexpr then_expr env fenv)
@@ -73,39 +74,39 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : fenv) : instruction list =
     @ [ ILabel (Label done_label)]
   | Apply (_, _) -> failwith "Compile Apply: To Be Done"
 
-and arg_immexpr (expr : immexpr) (env : env) (_ : fenv) : arg =
+and arg_immexpr (expr : immexpr) (env : env) (_ : afenv) : arg =
   match expr with
   | Num n -> Const (Int64.shift_left n 1)
   | Bool true -> Const (bool_true)
   | Bool false -> Const (bool_false)
   | Id x -> RegOffset (RSP, lookup_env x env)
 
-and and_immexpr (expr : immexpr) (env : env) (_ : fenv) : instruction list =
+and and_immexpr (expr : immexpr) (env : env) (_ : afenv) : instruction list =
   let done_label = Gensym.fresh "and" in
   [ IMov (Reg R10, Const bool_false) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJe (Label done_label) ] (* if arg0 is false -> false *)
-  @ [ IMov (Reg RAX, arg_immexpr expr env empty_fenv) ]
+  @ [ IMov (Reg RAX, arg_immexpr expr env empty_afenv) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJe (Label done_label) ] (* if arg1 is false -> false*)
   @ [ IMov (Reg RAX, Const bool_true) ] (* else -> true *)
   @ [ ILabel (Label done_label) ]
 
-and or_immexpr (expr : immexpr) (env : env) (_ : fenv) : instruction list =
+and or_immexpr (expr : immexpr) (env : env) (_ : afenv) : instruction list =
   let done_label = Gensym.fresh "or" in
   [ IMov (Reg R10, Const bool_true) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJe (Label done_label) ]
-  @ [ IMov (Reg R10, arg_immexpr expr env empty_fenv) ]
+  @ [ IMov (Reg R10, arg_immexpr expr env empty_afenv) ]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJe (Label done_label) ]
   @ [ IMov (Reg RAX, Const bool_true) ]
   @ [ ILabel (Label done_label) ]
 
-and lte_immexpr (expr : immexpr) (env : env) (_ : fenv) : instruction list =
+and lte_immexpr (expr : immexpr) (env : env) (_ : afenv) : instruction list =
   let lte_label = Gensym.fresh "lte" in
   let done_label = Gensym.fresh "ltedone" in
-  [ IMov (Reg R10, arg_immexpr expr env empty_fenv)]
+  [ IMov (Reg R10, arg_immexpr expr env empty_afenv)]
   @ [ ICmp (Reg RAX, Reg R10) ]
   @ [ IJle (Label lte_label) ]
   @ [ IMov (Reg RAX, Const bool_false) ]
@@ -116,7 +117,14 @@ and lte_immexpr (expr : immexpr) (env : env) (_ : fenv) : instruction list =
 
 let compile_prog (p : prog) : string =
   let f, e = p in
-  let instrs = compile_aexpr (anf_expr e) empty_env (List.map anf_fundef f) in
+  let afenv = check_afundefs (List.map anf_fundef f) in
+  let aexpr = check_anf (anf_expr e) afenv in
+  let () = 
+    print_string (
+      (String.concat "\n" (List.map string_of_afundef afenv)) 
+      ^ "\n" ^ 
+      string_of_aexpr aexpr) in 
+  let instrs = compile_aexpr aexpr empty_env afenv in
   let prelude ="
 section .text
 global our_code_starts_here
