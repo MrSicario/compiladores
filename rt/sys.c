@@ -15,14 +15,13 @@ extern u64 our_code_starts_here() asm("our_code_starts_here");
 void error(int errCode, u64 val) {
   if (errCode == ERR_NOT_NUMBER) {
     if (val == BOOL_TRUE) {
-      fprintf(stderr, "Type Error: Expected integer, but got true");
+      fprintf(stderr, "Type error: Expected integer but got true");
     } else if (val == BOOL_FALSE) {
-      fprintf(stderr, "Type Error: Expected integer, but got false");
+      fprintf(stderr, "Type error: Expected integer but got false");
     }
-    if ((val & BOOL_TAG) == 0) fprintf(stderr, "Got a number? %" PRId64, (int64_t)val >> 1);
   } else if (errCode == ERR_NOT_BOOLEAN) {
-    fprintf(stderr, "Expected boolean, but got %" PRId64 "\n", (int64_t)val >> 1);
-  } //else ...
+    fprintf(stderr, "Type error: Expected boolean but got %" PRId64 "\n", (int64_t)val >> 1);
+  }
 
   exit(errCode);
 }

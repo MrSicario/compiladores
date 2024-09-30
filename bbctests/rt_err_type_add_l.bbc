@@ -1,0 +1,6 @@
+NAME: RT Type Error; add with bool in left arg
+DESCRIPTION: triggers rt type error, expects an int in left arg
+SRC:
+(+ true 11)
+EXPECTED:
+|ORACLE

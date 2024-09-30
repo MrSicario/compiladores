@@ -1,0 +1,6 @@
+NAME: RT Type Error; lte with bool in right arg
+DESCRIPTION: triggers rt type error.
+SRC:
+(<= 5 false)
+EXPECTED:
+|ORACLE

@@ -1,0 +1,6 @@
+NAME: RT Type Error; and with int in right arg
+DESCRIPTION: triggers a rt type error, expects a bool
+SRC:
+(and true 5)
+EXPECTED:
+|ORACLE

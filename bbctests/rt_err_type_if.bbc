@@ -1,0 +1,6 @@
+NAME: RT Type Error; if
+DESCRIPTION: triggers rt error, cond expects a bool
+SRC:
+(if 5 19 (if true 36 7))
+EXPECTED:
+|ORACLE

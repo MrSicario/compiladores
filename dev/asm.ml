@@ -7,6 +7,13 @@ type reg =
 | RBP
 | R10
 | R11
+| RDI (* arg_1 *)
+| RSI (* arg_2 *)
+| RDX (* arg_3 *)
+| RCX (* arg_4 *)
+| R8  (* arg_5 *)
+| R9  (* arg_6 *)
+      (* arg_(i+6) -> RBP + 8*(i+2) *)
 
 (* arguments for instructions *)
 type arg =
@@ -40,6 +47,12 @@ let pp_reg reg : string =
   | RAX -> "RAX"
   | RSP -> "RSP"
   | RBP -> "RBP"
+  | RSI -> "RSI"
+  | RDI -> "RDI"
+  | RDX -> "RDX"
+  | RCX -> "RCX"
+  | R8  -> "R8"
+  | R9  -> "R9"
   | R10 -> "R10"
   | R11 -> "R11"
 
@@ -47,7 +60,7 @@ let pp_arg arg : string =
   match arg with
   | Const n -> sprintf "%#Lx" n
   | Reg r -> pp_reg r
-  | RegOffset (r, i) -> sprintf "[%s - %i]" (pp_reg r) (8 * i)
+  | RegOffset (r, i) -> sprintf "[%s %i]" (pp_reg r) (8 * i)
   | Label l -> l
 
 let pp_instr instr : string =

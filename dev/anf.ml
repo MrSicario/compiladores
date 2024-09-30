@@ -132,6 +132,13 @@ let anf_fundef (f : fundef) : afundef =
     let masked_expr = alpha_rename_expr e env in
     DefFun (n, l', anf_aexpr masked_expr)
 
+let get_depth aexpr =
+  let rec count aexpr acc =
+    match aexpr with
+    | Ret _ -> acc
+    | Let (_, _, aexpr) -> count aexpr (acc + 1)
+  in count aexpr 0
+
 let rec string_of_aexpr (a : aexpr) : string =
   match a with
   | Let (id, c, a) -> 
