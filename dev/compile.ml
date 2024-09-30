@@ -9,16 +9,16 @@ let bool_true = Int64.of_string "0x8000000000000001" (* 0x10...01 *)
 let bool_false = 1L (* 0x0...1 *)
 
 (* Lexical Environment *)
-type env = (string * int) list
+type env = (string * reg * int) list
 let empty_env = []
-let extend_env (name : string) (env : env) : (env * int) =
+let extend_env (name : string) (reg : reg) (env : env) : (env * int) =
   let slot = 1 + (List.length env) in
-  ((name, slot)::env, slot)
-let rec lookup_env (name : string) (env : env) : int =
+  ((name, reg, slot)::env, slot)
+let rec lookup_env (name : string) (env : env) : reg * int =
   match env with
   | [] -> raise (CTError (Printf.sprintf "Free identifier: %s" name))
-  | (n, i)::tail ->
-    if n = name then i else (lookup_env name tail)
+  | (n, reg, i)::tail ->
+    if n = name then (reg, i) else (lookup_env name tail)
 
 (* Function Environment *)
 type afenv = afundef list
@@ -30,10 +30,30 @@ let rec lookup_afenv : string -> afenv -> afundef =
     | (f::fs) -> if afundef_name f = s then f else lookup_afenv s fs
 
 (* Compiler *)
+let test_if_number =
+  [ ITest (Reg RAX, Const 1L) ]
+  @ [ IJnz (Label "error_not_number") ]
+
+let test_if_bool =
+  [ ITest (Reg RAX, Const 1L) ]
+  @ [ IJz (Label "error_not_bool") ]
+
+let error_not_number =
+  [ ILabel (Label "error_not_number") ]
+  @ [ IPush (Reg RAX) ]
+  @ [ IPush (Const 1L) ]
+  @ [ ICall (Label "error") ]
+
+let error_not_bool =
+  [ ILabel (Label "error_not_bool") ]
+  @ [ IPush (Reg RAX) ]
+  @ [ IPush (Const 2L) ]
+  @ [ ICall (Label "error") ]
+
 let rec compile_aexpr (expr : aexpr) (env : env) (fenv : afenv) : instruction list =
   match expr with
   | Let (id, c, a) ->
-    let (env', slot) = extend_env id env in
+    let (env', slot) = extend_env id RSP env in
     (compile_cexpr c env fenv)
     @ [ IMov (RegOffset (RSP, slot), Reg (RAX)) ]
     @ (compile_aexpr a env' fenv)
@@ -45,10 +65,11 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
   | Prim1 (op, c) -> 
     let head = compile_cexpr c env fenv in
     begin match op with
-    | Add1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env empty_afenv) ]
-    | Sub1 -> head @ [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env empty_afenv) ]
+    | Add1 -> head @ test_if_number @ [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env empty_afenv) ]
+    | Sub1 -> head @ test_if_number @ [ IAdd (Reg(RAX), arg_immexpr (Num (-1L)) empty_env empty_afenv) ]
     | Not -> 
       head 
+      @ test_if_bool
       @ [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] 
       @ [ IXor (Reg(RAX), Reg(R10)) ]
     | Print -> failwith "To Be Done"
@@ -73,7 +94,7 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
     @ (compile_cexpr else_expr env fenv)
     @ [ ILabel (Label done_label)]
   | Apply (name, _) -> 
-    (* Añadir metodo de llamado a funciones *)
+    (* Añadir método de llamado a funciones *)
     [ICall (Label name)]
 
 and arg_immexpr (expr : immexpr) (env : env) (_ : afenv) : arg =
@@ -81,7 +102,9 @@ and arg_immexpr (expr : immexpr) (env : env) (_ : afenv) : arg =
   | Num n -> Const (Int64.shift_left n 1)
   | Bool true -> Const (bool_true)
   | Bool false -> Const (bool_false)
-  | Id x -> RegOffset (RSP, lookup_env x env)
+  | Id x -> 
+    let reg, n = lookup_env x env in
+    RegOffset (reg, n)
 
 and and_immexpr (expr : immexpr) (env : env) (_ : afenv) : instruction list =
   let done_label = Gensym.fresh "and" in
@@ -117,37 +140,39 @@ and lte_immexpr (expr : immexpr) (env : env) (_ : afenv) : instruction list =
   @ [ IMov (Reg RAX, Const bool_true) ]
   @ [ ILabel (Label done_label) ]
 
-let compile_afundefs (fl: afundef list) : instruction list =
-  let compile_afundef f =
+let compile_afundefs (fenv: afundef list) : instruction list =
+  let compile_afundef f fenv =
     match f with
-    | DefFun (name, _, _) ->
+    | DefFun (name, _, expr) ->
       [ ILabel (Label name) ]
       @ [ IPush (Reg RBP) ]
       @ [ IMov (Reg RBP, Reg RSP) ]
       @ [ ISub (Reg RSP, Const 8L) ] (* TBD: Reemplazar 8 por 8*N *)
-      (* @ compile_aexpr expr [env con los argumentos] [fenv con las funciones ya definidas] *)
+      @ compile_aexpr expr [(* env *)] fenv (* TBD: Generar el env de la función acorde al método de llamada *)
       @ [ IMov (Reg RSP, Reg RBP) ]
       @ [ IPop (Reg RBP) ]
       @ [ IRet ]
-    | DefSys (_, _, _) -> failwith "To Be Done"
-  in let rec accumulate fl acc =
+    | DefSys (_, _, _) -> failwith "To Be Done" (* TBD: Llamado a funciones foraneas *)
+  in let rec accumulate fl fenv acc =
     match fl with
     | [] -> acc
-    | hd :: tail -> accumulate tail ((compile_afundef hd) @ acc)
-  in accumulate fl []
+    | hd :: tail -> 
+      let fenv' = hd :: fenv in
+      let instrs = compile_afundef hd fenv in
+      accumulate tail fenv' (acc @ instrs)
+  in accumulate fenv [] []
 
 let compile_prog (p : prog) : string =
   let f, e = p in
   let afenv = check_afundefs (List.map anf_fundef f) in
   let aexpr = check_anf (anf_expr e) afenv in
-  let () = 
-    print_string (
-      (String.concat "\n" (List.map string_of_afundef afenv)) 
-      ^ "\n" ^ 
-      string_of_aexpr aexpr ^ "\n") in 
   let instrs = compile_aexpr aexpr empty_env afenv in
-  let prelude ="
+  let header ="
 section .text
+extern error
 global our_code_starts_here
+" in
+  let prelude = "
 our_code_starts_here:" in
-  prelude ^ pp_instrs (instrs @ [ IRet ])
+  let _ = print_string (header ^ pp_instrs error_not_number ^ "\n" ^ pp_instrs error_not_bool ^ "\n" ^ prelude ^ pp_instrs (instrs @ [ IRet ])^"\n") in
+  header ^ pp_instrs error_not_number ^ "\n" ^ pp_instrs error_not_bool ^ "\n" ^ prelude ^ pp_instrs (instrs @ [ IRet ])

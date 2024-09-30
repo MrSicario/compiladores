@@ -1,0 +1,6 @@
+NAME: not
+DESCRIPTION: triggers a type error, expects a bool
+SRC:
+(not 3)
+EXPECTED:
+|ORACLE

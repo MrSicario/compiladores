@@ -23,7 +23,10 @@ type instruction =
 | ISub of arg * arg
 | ICmp of arg * arg
 | IXor of arg * arg
+| ITest of arg * arg
 | IJe  of arg
+| IJz of arg
+| IJnz of arg
 | IJle of arg
 | IJmp of arg
 | ILabel of arg
@@ -55,7 +58,10 @@ let pp_instr instr : string =
   | ISub (a1, a2) -> sprintf "  sub %s, %s" (pp_arg a1) (pp_arg a2)
   | ICmp (a1, a2) -> sprintf "  cmp %s, %s" (pp_arg a1) (pp_arg a2)
   | IXor (a1, a2) -> sprintf "  xor %s, %s" (pp_arg a1) (pp_arg a2)
+  | ITest (a1, a2) -> sprintf "  test %s, %s" (pp_arg a1) (pp_arg a2)
   | IJe a1  -> sprintf "  je %s" (pp_arg a1)
+  | IJz a1 -> sprintf "  jz %s" (pp_arg a1)
+  | IJnz a1 -> sprintf "  jnz %s" (pp_arg a1)
   | IJle a1 -> sprintf "  jle %s" (pp_arg a1)
   | IJmp a1 -> sprintf "  jmp %s" (pp_arg a1)
   | ILabel a1 -> sprintf "%s:" (pp_arg a1)

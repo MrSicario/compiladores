@@ -1,0 +1,6 @@
+NAME: add1
+DESCRIPTION: triggers type error, expects an int
+SRC:
+(add1 true)
+EXPECTED:
+|ORACLE
