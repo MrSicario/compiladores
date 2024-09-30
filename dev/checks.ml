@@ -43,7 +43,11 @@ and check_cexpr e afenv =
         (sprintf "Arity mismatch: %s expected %s arguments but got %s"
         f (string_of_int var_l) (string_of_int arg_l)))
     end
-
+  
+let check_anf aexpr afenv =
+  let _ = check_aexpr aexpr afenv in
+  aexpr
+  
 let check_afundefs afundefs =
   let rec check_declaration ls env names =
     match ls with
@@ -52,7 +56,7 @@ let check_afundefs afundefs =
       begin match hd with
       | DefFun (n, _, e) ->
         if List.mem n names then
-          raise (CTError (sprintf "Identifier already declared in namespace: %s" n))
+          raise (CTError (sprintf "Function already declared in namespace: %s" n))
         else 
           if check_aexpr e env then
             let env' = hd::env in
@@ -61,7 +65,7 @@ let check_afundefs afundefs =
           else false
       | DefSys (n, _, _) ->
         if List.mem n names then
-          raise (CTError (sprintf "Identifier already declared in namespace: %s" n))
+          raise (CTError (sprintf "Function already declared in namespace: %s" n))
         else
           let env' = hd :: env in
           let names' = n::names in
@@ -69,7 +73,3 @@ let check_afundefs afundefs =
       end
   in let _ = check_declaration afundefs [] [] in
   afundefs
-
-let check_anf aexpr afenv =
-  let _ = check_aexpr aexpr afenv in
-  aexpr

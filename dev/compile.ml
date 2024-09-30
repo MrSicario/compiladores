@@ -72,7 +72,9 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
     @ [ ILabel (Label else_label) ]
     @ (compile_cexpr else_expr env fenv)
     @ [ ILabel (Label done_label)]
-  | Apply (_, _) -> failwith "Compile Apply: To Be Done"
+  | Apply (name, _) -> 
+    (* Añadir metodo de llamado a funciones *)
+    [ICall (Label name)]
 
 and arg_immexpr (expr : immexpr) (env : env) (_ : afenv) : arg =
   match expr with
@@ -115,6 +117,25 @@ and lte_immexpr (expr : immexpr) (env : env) (_ : afenv) : instruction list =
   @ [ IMov (Reg RAX, Const bool_true) ]
   @ [ ILabel (Label done_label) ]
 
+let compile_afundefs (fl: afundef list) : instruction list =
+  let compile_afundef f =
+    match f with
+    | DefFun (name, _, _) ->
+      [ ILabel (Label name) ]
+      @ [ IPush (Reg RBP) ]
+      @ [ IMov (Reg RBP, Reg RSP) ]
+      @ [ ISub (Reg RSP, Const 8L) ] (* TBD: Reemplazar 8 por 8*N *)
+      (* @ compile_aexpr expr [env con los argumentos] [fenv con las funciones ya definidas] *)
+      @ [ IMov (Reg RSP, Reg RBP) ]
+      @ [ IPop (Reg RBP) ]
+      @ [ IRet ]
+    | DefSys (_, _, _) -> failwith "To Be Done"
+  in let rec accumulate fl acc =
+    match fl with
+    | [] -> acc
+    | hd :: tail -> accumulate tail ((compile_afundef hd) @ acc)
+  in accumulate fl []
+
 let compile_prog (p : prog) : string =
   let f, e = p in
   let afenv = check_afundefs (List.map anf_fundef f) in
@@ -123,7 +144,7 @@ let compile_prog (p : prog) : string =
     print_string (
       (String.concat "\n" (List.map string_of_afundef afenv)) 
       ^ "\n" ^ 
-      string_of_aexpr aexpr) in 
+      string_of_aexpr aexpr ^ "\n") in 
   let instrs = compile_aexpr aexpr empty_env afenv in
   let prelude ="
 section .text
