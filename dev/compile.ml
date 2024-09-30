@@ -44,25 +44,15 @@ let test_if_bool =
 let error_handlers =
   let error_not_number =
     [ ILabel (Label "error_not_number") ]
-    @ [ IPush (Reg RBP) ]
-    @ [ IMov (Reg RBP, Reg RSP) ]
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 1L) ]
     @ [ ICall (Label "error") ]
-    @ [ IMov (Reg RSP, Reg RBP) ]
-    @ [ IPop (Reg RBP) ]
-    @ [ IRet ]
   in
   let error_not_bool =
     [ ILabel (Label "error_not_bool") ]
-    @ [ IPush (Reg RBP) ]
-    @ [ IMov (Reg RBP, Reg RSP) ]
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 2L) ]
     @ [ ICall (Label "error") ]
-    @ [ IMov (Reg RSP, Reg RBP) ]
-    @ [ IPop (Reg RBP) ]
-    @ [ IRet ]
   in error_not_number @ error_not_bool
 
 let rec compile_aexpr (expr : aexpr) (env : env) (fenv : afenv) : instruction list =
