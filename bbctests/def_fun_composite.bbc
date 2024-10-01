@@ -1,0 +1,11 @@
+NAME: Composite function call
+DESCRIPTION: Calls a user defined composite function
+SRC:
+(
+    (def (gt x y) (not (<= x y)))
+    (def (f x y) (if (gt x y) x y))
+    (def (add2 x) (+ x 2))
+    (+ (add2 (f (add2 2) 2)) 4)
+)
+EXPECTED:
+10

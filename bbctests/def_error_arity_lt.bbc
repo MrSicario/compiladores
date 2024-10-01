@@ -1,0 +1,10 @@
+NAME: Function arity < error
+DESCRIPTION: Throws an arity mismatch error because user passed less arguments than expected
+STATUS: CT error
+SRC:
+(
+    (def (gt x y) (not (<= x y)))
+    (gt 1)
+)
+EXPECTED:
+.*Arity.*

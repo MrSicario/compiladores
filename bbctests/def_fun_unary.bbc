@@ -1,0 +1,9 @@
+NAME: Unary function call
+DESCRIPTION: Calls a user-defined unary function
+SRC:
+(
+    (def (add2 x) (+ x 2))
+    (add2 1)
+)
+EXPECTED:
+|ORACLE

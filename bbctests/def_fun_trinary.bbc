@@ -1,0 +1,9 @@
+NAME: Trinary function call
+DESCRIPTION: Calls a user defined trinary function
+SRC:
+(
+    (def (sum3 x y z) (+ (+ x y) z))
+    (sum3 1 2 3)
+)
+EXPECTED:
+|ORACLE

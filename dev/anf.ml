@@ -47,15 +47,14 @@ let rec anf_aexpr (expr : expr) : aexpr =
       anf_c t_expr (fun c_expr1 ->
         anf_c f_expr (fun c_expr2 ->
           Ret (If (imm_expr, c_expr1, c_expr2)))))
-  | Apply (name, expr) ->
+  | Apply (name, expr_l) ->
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
     in
     let base vs =
-      let id = Gensym.fresh name in
-      Let (id, Apply (name, List.rev vs), Ret (Atom (Id id)))
+      Ret (Apply (name, List.rev vs))
     in
-    List.fold_right acc_let expr base []
+    List.fold_right acc_let expr_l base []
 
 and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   match expr with

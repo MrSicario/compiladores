@@ -1,0 +1,11 @@
+NAME: Function arity > error
+DESCRIPTION: Throws a CT error because a function definition masks a previous one.
+STATUS: CT error
+SRC:
+(
+    (def (gt x y) (not (<= x y)))
+    (def (gt x) (gt x 0))
+    (gt 1 2)
+)
+EXPECTED:
+.*Function already declared.*

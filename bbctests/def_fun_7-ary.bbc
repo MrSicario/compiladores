@@ -1,0 +1,9 @@
+NAME: 7-ary function call
+DESCRIPTION: Calls a user defined 7-ary function
+SRC:
+(
+    (def (sum7 x y z a b c d) (+ (+ (+ (+ (+ (+ x y) z) a) b) c) d))
+    (sum7 1 2 3 4 5 6 7)
+)
+EXPECTED:
+|ORACLE

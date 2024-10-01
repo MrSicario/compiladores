@@ -1,0 +1,9 @@
+NAME: Nullary function call
+DESCRIPTION: Calls a user defined nullary function
+SRC:
+(
+    (def (get2) (+ 2 0))
+    (get2)
+)
+EXPECTED:
+|ORACLE

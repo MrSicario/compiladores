@@ -1,0 +1,9 @@
+NAME: Function arity > error
+DESCRIPTION: Throws a undefined function error
+STATUS: CT error
+SRC:
+(
+    (gt 1 2)
+)
+EXPECTED:
+.*Undefined.*

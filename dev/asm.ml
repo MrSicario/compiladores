@@ -24,6 +24,7 @@ type arg =
 
 (* asm instructions *)
 type instruction =
+| IBreak (* Line Break *)
 | IRet
 | IMov of arg * arg
 | IAdd of arg * arg
@@ -60,11 +61,15 @@ let pp_arg arg : string =
   match arg with
   | Const n -> sprintf "%#Lx" n
   | Reg r -> pp_reg r
-  | RegOffset (r, i) -> sprintf "[%s %i]" (pp_reg r) (8 * i)
+  | RegOffset (r, i) -> 
+    if i < 0
+      then sprintf "[%s - 8*%i]" (pp_reg r) (-i)
+      else sprintf "[%s + 8*%i]" (pp_reg r) (i)
   | Label l -> l
 
 let pp_instr instr : string =
   match instr with
+  | IBreak -> "" (* Agregado para mejorar legibilidad del assembly *)
   | IRet -> "  ret" 
   | IMov (a1, a2) -> sprintf "  mov %s, %s" (pp_arg a1) (pp_arg a2)
   | IAdd (a1, a2) -> sprintf "  add %s, %s" (pp_arg a1) (pp_arg a2)

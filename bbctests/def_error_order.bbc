@@ -1,0 +1,12 @@
+NAME: Order declaration order error
+DESCRIPTION: Throws an error because user-defined functions are badly declared
+STATUS: CT error
+SRC:
+(
+    (def (f x y) (if (gt x y) x y))
+    (def (gt x y) (not (<= x y)))
+    (def (add2 x) (+ x 2))
+    (add2 (f (add2 2) 2))
+)
+EXPECTED:
+.*Undefined function.*

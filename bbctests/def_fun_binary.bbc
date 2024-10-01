@@ -1,0 +1,9 @@
+NAME: Binary function call
+DESCRIPTION: Calls a user defined binary function
+SRC:
+(
+    (def (gt x y) (not (<= x y)))
+    (gt 4 2)
+)
+EXPECTED:
+|ORACLE
