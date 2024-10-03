@@ -6,7 +6,7 @@ open Parse
 open Checks
 
 (* Compile constants *)
-let bool_true = Int64.of_string "0x8000000000000001" (* 0x10...01 *)
+let bool_true = 0x8000000000000001L (* 0x10...01 *)
 let bool_false = 1L (* 0x0...1 *)
 let min_int = Int64.div Int64.min_int 2L
 let max_int = Int64.div Int64.max_int 2L
