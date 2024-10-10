@@ -35,3 +35,6 @@ _opam/
 
 # VSCode settings
 .vscode/
+
+# bbctest cache
+*.dSYM
