@@ -1,0 +1,10 @@
+NAME: FFI Print num
+DESCRIPTION: external print function
+SRC:
+(
+    (defsys print any -> any)
+    (+ (print (+ 2 3)) 4)
+)
+EXPECTED:
+> 5
+9

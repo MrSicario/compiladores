@@ -1,0 +1,9 @@
+NAME: FFI Value conversion
+DESCRIPTION: external function call converts representation to real values and back
+SRC:
+(
+    (defsys max int int -> int)
+    (< (max 5 (max -12 -30)) 7)
+)
+EXPECTED:
+|ORACLE

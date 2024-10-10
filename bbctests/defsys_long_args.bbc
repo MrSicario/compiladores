@@ -1,0 +1,9 @@
+NAME: FFI Large argument count
+DESCRIPTION: external function with more than 6 arguments
+SRC:
+(
+    (defsys mul_eight_nums int int int int int int int int -> int)
+    (mul_eight_nums 4 7 4 2 5 6 3 1)
+)
+EXPECTED:
+20160

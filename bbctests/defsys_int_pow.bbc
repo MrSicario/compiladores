@@ -1,0 +1,9 @@
+NAME: FFI power
+DESCRIPTION: external function for integer power operation
+SRC:
+(
+    (defsys int_pow int int -> int)
+    (int_pow (+ 3 5) (+ 1 2))
+)
+EXPECTED:
+512

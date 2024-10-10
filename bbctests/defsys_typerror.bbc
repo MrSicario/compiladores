@@ -1,0 +1,9 @@
+NAME: FFI Type error
+DESCRIPTION: external function call that triggers rt type error
+SRC:
+(
+    (defsys max int int -> int)
+	(max 1 true)
+)
+EXPECTED:
+|ORACLE

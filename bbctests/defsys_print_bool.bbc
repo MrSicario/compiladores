@@ -1,0 +1,11 @@
+NAME: FFI Print bool
+DESCRIPTION: external print function with bool value
+SRC:
+(
+    (defsys print any -> any)
+    (or (print (and true false)) (print true))
+)
+EXPECTED:
+> false
+> true
+true

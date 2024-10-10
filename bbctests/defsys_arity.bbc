@@ -1,0 +1,9 @@
+NAME: FFI Arity error
+DESCRIPTION: external function call that triggers arity error
+SRC:
+(
+    (defsys max int int -> int)
+    (max 4)
+)
+EXPECTED:
+|ORACLE
