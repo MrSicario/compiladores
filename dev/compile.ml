@@ -58,13 +58,13 @@ let error_handlers =
     [ ILabel (Label "error_not_number") ]
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 1L) ]
-    @ [ ICall (Label "_error") ]
+    @ [ ICall (Label "error") ]
   in
   let error_not_bool =
     [ ILabel (Label "error_not_bool") ]
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 2L) ]
-    @ [ ICall (Label "_error") ]
+    @ [ ICall (Label "error") ]
   in pp_instrs error_not_number ^ "\n" ^ pp_instrs error_not_bool
 
 let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) : instruction list =
@@ -161,9 +161,9 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       in let call_instr = 
         let n = List.length args in
         if n <= 6
-          then [ ICall (Label ("_" ^ name)) ]
+          then [ ICall (Label (name)) ]
           else let x = Int64.of_int (8 * (n-6)) in
-          [ ICall (Label ("_" ^ name)) ] @ [ IAdd (Reg RSP, Const x) ]
+          [ ICall (Label (name)) ] @ [ IAdd (Reg RSP, Const x) ]
       in caller_saved_push @ arg_instrs @ call_instr @ caller_saved_pop @ tag_type ret_type @ test_type ret_type
     end
 
@@ -329,10 +329,10 @@ let compile_afundefs (fenv: afundef list) : instruction list =
   in accumulate fenv [] []
 
 let gen_prologue aexpr afenv =
-  let externs = (List.map (String.cat "\nextern _") (get_external_funcs afenv)) in
+  let externs = (List.map (String.cat "\nextern ") (get_external_funcs afenv)) in
   let header = "
 section .text
-extern _error" ^ (String.concat "" externs) ^ "
+extern error" ^ (String.concat "" externs) ^ "
 global our_code_starts_here
 
 our_code_starts_here:
