@@ -152,8 +152,7 @@ and string_of_cexpr (c : cexpr) : string =
     (match op with
     | Add1 -> "add1"
     | Sub1 -> "sub1"
-    | Not -> "not"
-    | Print -> "print") (string_of_cexpr c)
+    | Not -> "not") (string_of_cexpr c)
   | Prim2 (op, i1, i2) -> sprintf "(%s %s %s)"
     (match op with
     | Add -> "+"

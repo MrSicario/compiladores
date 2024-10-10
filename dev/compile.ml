@@ -6,8 +6,8 @@ open Parse
 open Checks
 
 (* Compile constants *)
-let bool_true = 0x8000000000000001L (* 0x10...01 *)
-let bool_false = 1L (* 0x0...1 *)
+let bool_true = 0x8000000000000001L (* 0b10...01 *)
+let bool_false = 1L (* 0b0...1 *)
 let min_int = Int64.div Int64.min_int 2L
 let max_int = Int64.div Int64.max_int 2L
 
@@ -36,6 +36,13 @@ let rec lookup_afenv : string -> afenv -> afundef =
     match fenv with
     | [] -> raise (CTError (Printf.sprintf "Undefined function: %s" s))
     | (f::fs) -> if afundef_name f = s then f else lookup_afenv s fs
+let get_external_funcs (fenv:afenv) =
+  let rec get_external_funcs fenv r =
+    match fenv with
+    | (DefSys(name,_,_)::fs) -> (get_external_funcs fs (r @ [name]))
+    | (DefFun(_,_,_)::fs) -> (get_external_funcs fs r)
+    | [] -> r
+  in (get_external_funcs fenv [])
 
 (* Compiler *)
 let test_if_number =
@@ -51,13 +58,13 @@ let error_handlers =
     [ ILabel (Label "error_not_number") ]
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 1L) ]
-    @ [ ICall (Label "error") ]
+    @ [ ICall (Label "_error") ]
   in
   let error_not_bool =
     [ ILabel (Label "error_not_bool") ]
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 2L) ]
-    @ [ ICall (Label "error") ]
+    @ [ ICall (Label "_error") ]
   in pp_instrs error_not_number ^ "\n" ^ pp_instrs error_not_bool
 
 let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) : instruction list =
@@ -82,7 +89,6 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ test_if_bool
       @ [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] 
       @ [ IXor (Reg(RAX), Reg(R10)) ]
-    | Print -> failwith "To Be Done"
     end
   | Prim2 (op, imm1, imm2) -> 
     let const1 = [ IMov (Reg RAX, arg_immexpr imm1 l_env e_env) ] in
@@ -126,23 +132,23 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
     @ (compile_cexpr else_expr l_env e_env fenv)
     @ [ ILabel (Label done_label)]
   | Apply (name, args) ->
-    begin match lookup_afenv name fenv with
+    let caller_saved_push =
+      [ IPush (Reg R9) ]
+      @ [ IPush (Reg R8) ]
+      @ [ IPush (Reg RCX) ]
+      @ [ IPush (Reg RDX) ]
+      @ [ IPush (Reg RSI) ]
+      @ [ IPush (Reg RDI) ]
+    in let caller_saved_pop =
+      [ IPop (Reg RDI) ]
+      @ [ IPop (Reg RSI) ]
+      @ [ IPop (Reg RDX) ]
+      @ [ IPop (Reg RCX) ]
+      @ [ IPop (Reg R8) ]
+      @ [ IPop (Reg R9) ]
+    in begin match lookup_afenv name fenv with
     | DefFun (name, _, _) ->
-      let caller_saved_push =
-        [ IPush (Reg R9) ]
-        @ [ IPush (Reg R8) ]
-        @ [ IPush (Reg RCX) ]
-        @ [ IPush (Reg RDX) ]
-        @ [ IPush (Reg RSI) ]
-        @ [ IPush (Reg RDI) ]
-      in let caller_saved_pop =
-        [ IPop (Reg RDI) ]
-        @ [ IPop (Reg RSI) ]
-        @ [ IPop (Reg RDX) ]
-        @ [ IPop (Reg RCX) ]
-        @ [ IPop (Reg R8) ]
-        @ [ IPop (Reg R9) ]
-      in let arg_instrs = build_args args l_env e_env
+      let arg_instrs = build_args args l_env e_env
       in let call_instr = 
         let n = List.length args in
         if n <= 6 
@@ -150,7 +156,15 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
           else let x = Int64.of_int (8 * (n-6)) in
           [ ICall (Label name) ] @ [ IAdd (Reg RSP, Const x) ]
       in caller_saved_push @ arg_instrs @ call_instr @ caller_saved_pop
-    | DefSys (_, _, _) -> failwith "To Be Done"
+    | DefSys (name, arg_typelist, ret_type) ->
+      let arg_instrs = build_test_args arg_typelist args l_env e_env
+      in let call_instr = 
+        let n = List.length args in
+        if n <= 6
+          then [ ICall (Label ("_" ^ name)) ]
+          else let x = Int64.of_int (8 * (n-6)) in
+          [ ICall (Label ("_" ^ name)) ] @ [ IAdd (Reg RSP, Const x) ]
+      in caller_saved_push @ arg_instrs @ call_instr @ caller_saved_pop @ tag_type ret_type @ test_type ret_type
     end
 
 and build_args args l_env e_env =
@@ -169,6 +183,50 @@ and build_args args l_env e_env =
       | _ -> failwith "Negative list length"
       end
   in inner_rec args []
+
+and test_type ctype =
+  match ctype with
+  | CInt -> test_if_number
+  | CBool -> test_if_bool
+  | CAny -> []
+
+(* Untag/tag the value currently in RAX as the specified type **)
+and untag_type ctype =
+  match ctype with
+  | CInt -> [ ISar (Reg RAX, Const 1L) ]
+  | CBool -> [ IShr (Reg RAX, Const 63L) ]
+  | CAny -> []
+
+and tag_type ctype =
+  match ctype with
+  | CInt -> [ ISal (Reg RAX, Const 1L) ]
+  | CBool -> [ IShl (Reg RAX, Const 63L) ] @ [ IAdd (Reg RAX, Const 1L) ]
+  | CAny -> []
+
+(* Like build_args, but type checks each argument first *)
+and build_test_args expected_types args l_env e_env =
+  let rec inner_rec expected_types args instrs acount =
+    match args with
+    | [] -> instrs
+    | hd::tl ->
+      let expected_type = List.hd expected_types
+      in let move_test_untag =
+        [ IMov (Reg RAX, arg_immexpr hd l_env e_env)]
+        @ test_type expected_type
+        @ untag_type expected_type
+      in begin match acount with
+      | 0 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IMov (Reg RDI, Reg RAX) ] @ instrs) (acount+1)
+      | 1 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IMov (Reg RSI, Reg RAX) ] @ instrs) (acount+1)
+      | 2 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IMov (Reg RDX, Reg RAX) ] @ instrs) (acount+1)
+      | 3 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IMov (Reg RCX, Reg RAX) ] @ instrs) (acount+1)
+      | 4 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IMov (Reg R8,  Reg RAX) ] @ instrs) (acount+1)
+      | 5 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IMov (Reg R9,  Reg RAX) ] @ instrs) (acount+1)
+      | n when n > 5 -> inner_rec (List.tl expected_types) tl ( move_test_untag @ [ IPush (Reg RAX) ] @ instrs) (acount+1)
+      | _ -> failwith "Negative argument count"
+      end
+  in inner_rec expected_types args [] 0
+
+
 
 and arg_immexpr (expr : immexpr) (l_env : env) (e_env : env) : arg =
   match expr with
@@ -260,7 +318,7 @@ let compile_afundefs (fenv: afundef list) : instruction list =
       @ [ IMov (Reg RSP, Reg RBP) ]
       @ [ IPop (Reg RBP) ]
       @ [ IRet ]
-    | DefSys (_, _, _) -> failwith "To Be Done" (* TBD: Llamado a funciones foraneas *)
+    | DefSys (_, _, _) -> []
   in let rec accumulate fl fenv acc =
     match fl with
     | [] -> acc
@@ -270,10 +328,11 @@ let compile_afundefs (fenv: afundef list) : instruction list =
       accumulate tail fenv' (acc @ [ IBreak ] @ instrs)
   in accumulate fenv [] []
 
-let gen_prologue aexpr =
+let gen_prologue aexpr afenv =
+  let externs = (List.map (String.cat "\nextern _") (get_external_funcs afenv)) in
   let header = "
 section .text
-extern error
+extern _error" ^ (String.concat "" externs) ^ "
 global our_code_starts_here
 
 our_code_starts_here:
@@ -292,7 +351,7 @@ let compile_prog (p : prog) : string =
   let instrs = compile_aexpr aexpr empty_env empty_env afenv in
   let fun_instrs = compile_afundefs afenv in
   let _ = print_string (string_of_aexpr aexpr ^ "\n") in
-  let prologue = gen_prologue aexpr in
+  let prologue = gen_prologue aexpr afenv in
   let epilogue ="
   mov RSP, RBP
   pop RBP

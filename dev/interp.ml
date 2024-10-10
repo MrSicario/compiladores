@@ -126,8 +126,7 @@ let rec interp expr env fenv =
     (match op with
     | Add1 -> liftIII ( Int64.add ) (interp e env fenv) (NumV 1L)
     | Sub1 -> liftIII ( Int64.sub ) (interp e env fenv) (NumV 1L)
-    | Not -> liftBB (Bool.not) (interp e env fenv)
-    | Print -> (interp (Apply ("print", [e])) env fenv))
+    | Not -> liftBB (Bool.not) (interp e env fenv))
   | Prim2 (op, e1, e2) -> 
     (match op with
     | And -> if bool_of_value (interp e1 env fenv) then
