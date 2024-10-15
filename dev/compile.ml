@@ -118,6 +118,7 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ test_if_number
       @ [ IMov (Reg RAX, Reg R10) ]
       @ (lte_immexpr imm2 l_env e_env)
+    | Get -> failwith "TBD"
     end
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = Gensym.fresh "else" in
@@ -189,6 +190,7 @@ and test_type ctype =
   | CInt -> test_if_number
   | CBool -> test_if_bool
   | CAny -> []
+  | CTuple _ -> failwith "TBD"
 
 (* Untag/tag the value currently in RAX as the specified type **)
 and untag_type ctype =
@@ -196,12 +198,14 @@ and untag_type ctype =
   | CInt -> [ ISar (Reg RAX, Const 1L) ]
   | CBool -> [ IShr (Reg RAX, Const 63L) ]
   | CAny -> []
+  | CTuple _ -> failwith "TBD"
 
 and tag_type ctype =
   match ctype with
   | CInt -> [ ISal (Reg RAX, Const 1L) ]
   | CBool -> [ IShl (Reg RAX, Const 63L) ] @ [ IAdd (Reg RAX, Const 1L) ]
   | CAny -> []
+  | CTuple _ -> failwith "TBD"
 
 (* Like build_args, but type checks each argument first *)
 and build_test_args expected_types args l_env e_env =
@@ -329,7 +333,7 @@ let compile_afundefs (fenv: afundef list) : instruction list =
   in accumulate fenv [] []
 
 let gen_prologue aexpr afenv =
-  let externs = (List.map (String.cat "\nextern ") (get_external_funcs afenv)) in
+  let externs = (List.map (String.cat "\nextern") (get_external_funcs afenv)) in
   let header = "
 section .text
 extern error" ^ (String.concat "" externs) ^ "

@@ -27,7 +27,13 @@ let test_parse_var () =
 
 let test_parse_bool () =
   check exp "same bool" (parse_exp (`Atom "true")) (Bool true)
-  
+
+let test_parse_tuple () =
+    check exp "same tuple" (parse_exp (`List [`Atom "tup"; `Atom "true" ; `Atom "1"])) (Tuple [(Bool true);(Num 1L)] )
+
+let test_parse_empty_tuple () =
+    check exp "empty tuple" (parse_exp (`List [`Atom "tup"])) (Tuple [] )
+
 let test_parse_add1 () =
   check exp "increment applies" 
   (parse_exp (`List [`Atom "add1" ; `Atom "1"])) 
@@ -52,6 +58,12 @@ let test_parse_and () =
   check exp "conjunction applies" 
   (parse_exp (`List [`Atom "and" ; `Atom "true" ; `Atom "false"])) 
   (Prim2 (And, Bool true, Bool false))
+
+let test_parse_get () =
+    check exp "get applies" (parse_exp (`List [`Atom "get" ; `Atom "1";`Atom "2"])) (Prim2 (Get,Num 1L, Num 2L))
+
+let test_parse_set () =
+    check exp "set applies" (parse_exp (`List [`Atom "set" ; `Atom "true";`Atom "37";`Atom "3"])) (Set (Bool true, Num 37L,Num 3L))
 
 let test_parse_fork () =
   check exp "if clause applies"
@@ -142,6 +154,26 @@ let test_interp_fo_fun_1 () =
   )) empty_env in 
   check value "correct simple function execution" v 
   (NumV 4L)
+
+let test_interp_tup () =
+  let v = (interp (Tuple [Num 12L;Bool true;Tuple []])) empty_env empty_fenv in
+  check value "a tuple val" v 
+  (TupleV [(ref (NumV 12L));(ref (BoolV true)); (ref (TupleV []))])
+
+let test_interp_empty_tup () =
+  let v = (interp (Tuple [])) empty_env empty_fenv in
+  check value "an empty tuple val" v 
+  (TupleV [])
+
+let test_interp_get () =
+  let v = (interp (Prim2 (Get ,Tuple [Num 12L;Bool true;Tuple []],Num 0L))) empty_env empty_fenv in
+  check value "correct get execution" v 
+  (NumV 12L)
+
+let test_interp_set () =
+  let v = (interp (Let ("x",(Tuple [Num 12L;Bool true;Tuple []]) , (Let ("foo", (Set (Id "x", Num 1L, Bool false)), (Id "x")))))) empty_env empty_fenv in
+  check value "correct set execution" v 
+  (TupleV [(ref (NumV 12L));(ref (BoolV false)); (ref (TupleV []))])
   
 let test_interp_fo_fun_2 () =
   let v = (interp_prog (
@@ -280,7 +312,7 @@ let test_error_arity_more_args () =
                     empty_env) in 
   check_raises  "should report arity mismatch (3 args instead of 1)" 
   (CTError "Arity mismatch: g expected 1 arguments but got 3") v
- 
+
 let test_error_undef_h () =
   let v = (fun () -> ignore @@
                     (interp_prog (parse_prog (sexp_from_string "( 
@@ -327,7 +359,7 @@ let test_ffi_error_arity_more_args () =
                     empty_env) in 
   check_raises  "should report arity mismatch (2 args instead of 1)" 
   (CTError "Arity mismatch: print expected 1 arguments but got 2") v
- 
+
 let test_ffi_type_error () =
   let v = (fun () -> ignore @@
                     (interp_prog (parse_prog (sexp_from_string "( 
@@ -360,7 +392,74 @@ let test_ffi_error_undef_pow () =
                     empty_env) in 
   check_raises  "should report that `pow` is undefined" 
   (CTError "Undefined function: pow") v
-  
+
+(* Tuple errors: type errors produced by ill-typed arguments to [get] and [set],
+   and index-out-of-bounds errors. *)
+
+let test_get_error_ill_typed_tuple () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (get false 12))")))
+                    empty_env) in 
+  check_raises  "should report that first argument is not a tuple" 
+  (RTError "Type error: Expected tuple but got false") v
+
+let test_get_error_ill_typed_index () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (get (tup 2 true) (tup)))")))
+                    empty_env) in 
+  check_raises  "should report that second argument is not an integer" 
+  (RTError "Type error: Expected integer but got (tup)") v
+
+let test_get_error_multi_ill_typed () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (get -34 true))")))
+                    empty_env) in 
+  check_raises  "should report the first ill-typed argument" 
+  (RTError "Type error: Expected tuple but got -34") v
+
+let test_get_index_out_of_bounds () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (get (tup 2 true (tup)) -4))")))
+                    empty_env) in 
+  check_raises  "should report index -4 out of bounds" 
+  (RTError "Index out of bounds: Tried to access index -4 of (tup 2 true (tup))") v
+
+
+let test_set_error_ill_typed_tuple () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (set false 12 true))")))
+                    empty_env) in 
+  check_raises  "should report that first argument is not a tuple" 
+  (RTError "Type error: Expected tuple but got false") v
+
+let test_set_error_ill_typed_index () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (set (tup 2 true) (tup) -23))")))
+                    empty_env) in 
+  check_raises  "should report that second argument is not an integer" 
+  (RTError "Type error: Expected integer but got (tup)") v
+
+let test_set_error_multi_ill_typed () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (set -34 true (tup)))")))
+                    empty_env) in 
+  check_raises  "should report the first ill-typed argument" 
+  (RTError "Type error: Expected tuple but got -34") v
+
+let test_set_index_out_of_bounds () =
+  let v = (fun () -> ignore @@
+                    (interp_prog (parse_prog (sexp_from_string "( 
+                      (set (tup 2 true (tup)) 3 true))")))
+                    empty_env) in 
+  check_raises  "should report index 3 out of bounds" 
+  (RTError "Index out of bounds: Tried to access index 3 of (tup 2 true (tup))") v
 
 (* OCaml tests: extend with your own tests *)
 let ocaml_tests = [
@@ -369,9 +468,12 @@ let ocaml_tests = [
     test_case "A negative number" `Quick test_parse_int_neg ;
     test_case "A variable" `Quick test_parse_var ;
     test_case "A boolean" `Quick test_parse_bool ;
+    test_case "A tuple" `Quick test_parse_tuple ;
     test_case "An increment" `Quick test_parse_add1 ;
     test_case "A decrement" `Quick test_parse_sub1 ;
     test_case "An addition" `Quick test_parse_add ;
+    test_case "A get" `Quick test_parse_get ;
+    test_case "An set" `Quick test_parse_set ;
     test_case "A lesser comparison" `Quick test_parse_less ;
     test_case "A conjunction" `Quick test_parse_and ;
     test_case "An if clause" `Quick test_parse_fork ;
@@ -385,6 +487,7 @@ let ocaml_tests = [
     test_case "A number" `Quick test_interp_num ;
     test_case "A variable" `Quick test_interp_var ;
     test_case "A boolean" `Slow test_interp_bool ;
+    test_case "A tuple" `Slow test_interp_tup ;
     test_case "An increment" `Slow test_interp_add1 ;
     test_case "An decrement" `Slow test_interp_sub1 ;
     test_case "An addition" `Slow test_interp_add ;
@@ -398,7 +501,9 @@ let ocaml_tests = [
     test_case "A complex function" `Slow test_interp_fo_fun_2 ;
     test_case "A simple application" `Slow test_interp_fo_app_1 ;
     test_case "A complex application" `Slow test_interp_fo_app_2 ;
-    test_case "A compound expression" `Quick test_interp_compound ;
+    test_case "A compound expression" `Quick test_interp_compound;
+    test_case "A get expression" `Slow test_interp_get ;
+    test_case "A set expression" `Slow test_interp_set ;
     test_case "`and` is lazy" `Quick lazy_and
   ] ;
   "errors", [
@@ -417,6 +522,15 @@ let ocaml_tests = [
     test_case "FF Report first ill-typed arg to `xor`" `Quick test_ffi_error_multi_ill_typed ;
     test_case "FF Undefined: `pow`" `Quick test_ffi_error_undef_pow ;
 
+    test_case "Tuple Get: Ill-typed tuple" `Quick test_get_error_ill_typed_tuple ;
+    test_case "Tuple Get: Ill-typed index" `Quick test_get_error_ill_typed_index ;
+    test_case "Tuple Get: Multiple ill-typed arguments" `Quick test_get_error_multi_ill_typed;
+    test_case "Tuple Get: Index out of bounds" `Quick test_get_index_out_of_bounds ;
+
+    test_case "Tuple Set: Ill-typed tuple" `Quick test_set_error_ill_typed_tuple ;
+    test_case "Tuple Set: Ill-typed index" `Quick test_set_error_ill_typed_index ;
+    test_case "Tuple Set: Multiple ill-typed arguments" `Quick test_set_error_multi_ill_typed;
+    test_case "Tuple Set: Index out of bounds" `Quick test_set_index_out_of_bounds ;
 
   ]
 ]
