@@ -1,0 +1,7 @@
+NAME: Tuple empty
+DESCRIPTION: Create a tuple with zero elements
+SRC:
+(let (t (tup (tup) true 42))
+	t)
+EXPECTED:
+|ORACLE

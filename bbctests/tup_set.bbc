@@ -1,0 +1,16 @@
+NAME: Tuple set
+DESCRIPTION: Make a tuple variable and mutate it
+SRC:
+(
+	(defsys print any -> any)
+	(get
+		(set
+			(tup (print false) -3 42)
+			(+ -1 1)
+			(print true))
+		0)
+)
+EXPECTED:
+> false
+> true
+true

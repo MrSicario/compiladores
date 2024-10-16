@@ -1,0 +1,7 @@
+NAME: Tuple get type error
+DESCRIPTION: Attempt to get an element from a non-tuple value
+STATUS: RT error
+SRC:
+(get 4 9)
+EXPECTED:
+.*Type*.

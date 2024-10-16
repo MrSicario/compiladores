@@ -1,0 +1,6 @@
+NAME: Tuple index error
+DESCRIPTION: Get an out of bounds index
+SRC:
+(get (tup 4 6 2 4) 9)
+EXPECTED:
+|ORACLE

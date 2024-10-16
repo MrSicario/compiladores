@@ -1,0 +1,6 @@
+NAME: Tuple nested
+DESCRIPTION: Make a tuple with tuple elements
+SRC:
+(tup 4 61 8 true (tup 4 (tup 22 1 4) false) 23)
+EXPECTED:
+|ORACLE

@@ -1,0 +1,6 @@
+NAME: Tuple complex
+DESCRIPTION: Create a tuple expression and return it
+SRC:
+(tup 87 (+ 5 8) 4 true (if (<= 9 3) 10 23))
+EXPECTED:
+(tup 87 13 4 true 23)

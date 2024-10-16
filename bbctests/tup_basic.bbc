@@ -1,0 +1,6 @@
+NAME: Tuple basic
+DESCRIPTION: Create a tuple and return it
+SRC:
+(tup 5 8 5 2)
+EXPECTED:
+|ORACLE

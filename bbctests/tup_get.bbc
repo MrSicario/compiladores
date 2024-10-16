@@ -1,0 +1,6 @@
+NAME: Tuple get
+DESCRIPTION: Create a tuple and get an element
+SRC:
+(get (tup 20 1 (+ 5 3) 4) 2)
+EXPECTED:
+|ORACLE

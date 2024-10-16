@@ -1,0 +1,10 @@
+NAME: Tuple argument
+DESCRIPTION: Pass a tuple as an argument to a function
+SRC:
+(
+	(def (getsecond t) (get t 1))
+	(let (v (tup 5 (+ 96 69) 3 7 4 2 2 7 5 3 1))
+		(getsecond v))
+)
+EXPECTED:
+|ORACLE
