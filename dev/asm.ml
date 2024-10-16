@@ -22,7 +22,6 @@ type arg =
 | Reg of reg
 | RegOffset of reg * int
 | RegIndex of reg * reg
-| Mem of reg
 | Label of string
 
 (* asm instructions *)
@@ -82,7 +81,6 @@ let pp_arg arg : string =
       then sprintf "[%s - 8*%i]" (pp_reg r) (-i)
       else sprintf "[%s + 8*%i]" (pp_reg r) (i)
   | RegIndex (r, i) -> sprintf "[%s + %s * 8]" (pp_reg r) (pp_reg i)
-  | Mem r -> sprintf "[%s]" (pp_reg r)
   | Label l -> l
 
 let pp_instr instr : string =
