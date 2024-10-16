@@ -14,6 +14,8 @@ and cexpr =
   | Prim2 of prim2 * immexpr * immexpr
   | If of immexpr * cexpr * cexpr
   | Apply of string * immexpr list
+  | Tuple of immexpr list
+  | Set of immexpr * immexpr * immexpr
 
 and immexpr =
   | Num of int64
@@ -55,6 +57,18 @@ let rec anf_aexpr (expr : expr) : aexpr =
       Ret (Apply (name, List.rev vs))
     in
     List.fold_right acc_let expr_l base []
+  | Tuple expr_list ->
+    let accum expr ctx vs =
+      anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
+    in let base vs =
+      Ret (Tuple (List.rev vs))
+    in List.fold_right accum expr_list base []
+  | Set (e1, e2, e3) ->
+    anf_imm e1 (fun imm_expr1 ->
+      anf_imm e2 (fun imm_expr2 ->
+        anf_imm e3 (fun imm_expr3 ->
+          Ret (Set (imm_expr1, imm_expr2, imm_expr3)))))
+
 
 and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   match expr with
@@ -88,6 +102,19 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
       Let (id, Apply (name, List.rev vs), k (Id id))
     in
     List.fold_right acc_let expr base []
+  | Tuple expr_list ->
+    let accum expr ctx vs =
+      anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
+    in let base vs =
+      let tmp = Gensym.fresh "tup" in
+      Let (tmp, Tuple (List.rev vs), k (Id tmp))
+    in List.fold_right accum expr_list base []
+  | Set (e1, e2, e3) ->
+    let tmp = Gensym.fresh "set" in
+    anf_imm e1 (fun imm_expr1 ->
+      anf_imm e2 (fun imm_expr2 ->
+        anf_imm e3 (fun imm_expr3 ->
+          Let (tmp, Set (imm_expr1, imm_expr2, imm_expr3), k (Id tmp)))))
           
 and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
   match expr with
@@ -109,16 +136,26 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
       anf_c then_expr (fun c_expr1 ->
         anf_c else_expr (fun c_expr2 ->
           k (If (imm_expr, c_expr1, c_expr2)))))
-  | Apply (name, expr) ->
+  | Apply (name, expr_list) ->
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
-    in
-    let base vs =
+    in let base vs =
       let id = Gensym.fresh name in
       Let (id, Apply (name, List.rev vs), k (Atom (Id id)))
     in
-    List.fold_right acc_let expr base []
-     
+    List.fold_right acc_let expr_list base []
+  | Tuple expr_list ->
+    let accum expr ctx vs =
+      anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
+    in let base vs =
+      k (Tuple (List.rev vs))
+    in List.fold_right accum expr_list base []
+  | Set (e1, e2, e3) ->
+    anf_imm e1 (fun imm_expr1 ->
+      anf_imm e2 (fun imm_expr2 ->
+        anf_imm e3 (fun imm_expr3 ->
+          k (Set (imm_expr1, imm_expr2, imm_expr3)))))
+
 let anf_expr (expr : expr) : aexpr =
   let masked_expr = alpha_rename_expr expr Env.empty in
   anf_aexpr masked_expr
@@ -158,7 +195,8 @@ and string_of_cexpr (c : cexpr) : string =
     | Add -> "+"
     | And -> "and"
     | Or -> "or"
-    | Lte -> "<=") (string_of_immexpr i1) (string_of_immexpr i2)
+    | Lte -> "<="
+    | Get -> "get") (string_of_immexpr i1) (string_of_immexpr i2)
   | If (icond, cthen, celse) -> sprintf "(if %s %s %s)" 
     (string_of_immexpr icond) 
     (string_of_cexpr cthen)
@@ -166,6 +204,8 @@ and string_of_cexpr (c : cexpr) : string =
   | Apply (name, args) -> sprintf "(%s (%s))"
     name
     (String.concat " " (List.map string_of_immexpr args))
+  | Tuple expr_list -> sprintf ("(tup %s)") (String.concat " " (List.map string_of_immexpr expr_list))
+  | Set (e1, e2, e3) -> sprintf ("(set %s %s %s)") (string_of_immexpr e1) (string_of_immexpr e2) (string_of_immexpr e3)
 
 and string_of_immexpr (i : immexpr) : string =
   match i with

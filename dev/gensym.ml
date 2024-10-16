@@ -59,5 +59,7 @@ let rec  alpha_rename_expr expr env =
       end
   | Apply (f, expr_list) -> 
       Apply (f, List.map (fun e -> alpha_rename_expr e env) expr_list)
-  | Tuple _ -> failwith "TBD"
-  | Set (_,_,_) -> failwith "TBD"
+  | Tuple expr_list ->
+    let arename_env = fun x -> alpha_rename_expr x env in
+    Tuple (List.map arename_env expr_list)
+  | Set (e, k, v) -> Set (alpha_rename_expr e env, alpha_rename_expr k env, alpha_rename_expr v env)

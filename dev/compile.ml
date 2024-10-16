@@ -11,6 +11,9 @@ let bool_false = 1L (* 0b0...1 *)
 let min_int = Int64.div Int64.min_int 2L
 let max_int = Int64.div Int64.max_int 2L
 
+let pointer_mask = 0b111L
+let tuple_tag = 0b011L
+
 (* Lexical Environment *)
 type env = (string * (reg * int)) list
 let empty_env = []
@@ -45,6 +48,25 @@ let get_external_funcs (fenv:afenv) =
   in (get_external_funcs fenv [])
 
 (* Compiler *)
+
+(* Untag/tag the value currently in RAX as the specified type **)
+let untag_type_at reg ctype =
+  match ctype with
+  | CInt -> [ ISar (Reg reg, Const 1L) ]
+  | CBool -> [ IShr (Reg reg, Const 63L) ]
+  | CAny -> []
+  | CTuple _ -> [ ISub (Reg reg, Const tuple_tag) ]
+
+let tag_type_at reg ctype =
+  match ctype with
+  | CInt -> [ ISal (Reg reg, Const 1L) ]
+  | CBool -> [ IShl (Reg reg, Const 63L) ] @ [ IAdd (Reg reg, Const 1L) ]
+  | CAny -> []
+  | CTuple _ -> [ IAdd (Reg reg, Const tuple_tag) ]
+
+let untag_type ctype = untag_type_at RAX ctype
+let tag_type ctype = tag_type_at RAX ctype
+
 let test_if_number =
   [ ITest (Reg RAX, Const 1L) ]
   @ [ IJnz (Label "error_not_number") ]
@@ -53,19 +75,48 @@ let test_if_bool =
   [ ITest (Reg RAX, Const 1L) ]
   @ [ IJz (Label "error_not_bool") ]
 
+(* destructive*)
+let test_if_tuple =
+  [ IAnd (Reg RAX, Const (pointer_mask)) ]
+  @ [ ICmp (Reg RAX, Const (tuple_tag)) ]
+  @ [ IJne  (Label "error_not_tuple") ]
+
+let test_type ctype =
+    match ctype with
+    | CInt -> test_if_number
+    | CBool -> test_if_bool
+    | CAny -> []
+    | CTuple _ -> test_if_tuple
+  
+
 let error_handlers =
   let error_not_number =
     [ ILabel (Label "error_not_number") ]
-    @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 1L) ]
+    @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ ICall (Label "error") ]
   in
   let error_not_bool =
     [ ILabel (Label "error_not_bool") ]
-    @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDI, Const 2L) ]
+    @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ ICall (Label "error") ]
-  in pp_instrs error_not_number ^ "\n" ^ pp_instrs error_not_bool
+  in
+  let error_not_tuple =
+    [ ILabel (Label "error_not_tuple") ]
+    @ [ IMov (Reg RDI, Const 3L) ]
+    @ [ IMov (Reg RSI, Reg RAX) ]
+    @ [ ICall (Label "error")]
+  in
+  let error_index =
+    [ ILabel (Label "error_index") ]
+    @ [ IMov (Reg RDI, Const 10L) ]
+    @ tag_type (CTuple [])
+    @ tag_type_at R10 CInt
+    @ [ IMov (Reg RSI, Reg RAX) ]
+    @ [ IMov (Reg RDX, Reg R10) ]
+    @ [ ICall (Label "error") ]
+  in String.concat "\n" (List.map pp_instrs [error_not_number ; error_not_bool ; error_not_tuple ; error_index])
 
 let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) : instruction list =
   match expr with
@@ -118,7 +169,22 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ test_if_number
       @ [ IMov (Reg RAX, Reg R10) ]
       @ (lte_immexpr imm2 l_env e_env)
-    | Get -> failwith "TBD"
+    | Get ->
+      const2 (* index *)
+      @ test_if_number
+      @ untag_type CInt
+      @ [ IMov (Reg R10, Reg RAX) ]
+      @ const1 (* tuple *)
+      @ test_if_tuple
+      @ const1
+      @ untag_type (CTuple [])
+      @ [ IMov (Reg R11, RegOffset(RAX, 0)) ] (* get tuple size and check bounds*)
+      @ [ ICmp (Reg R10, Reg R11)]
+      @ [ IJge (Label "error_index") ]
+      @ [ ICmp (Reg R10, Const 0L) ]
+      @ [ IJl  (Label "error_index") ]
+      @ [ IAdd (Reg R10, Const 1L) ] (* finally get the value at idx+1 to skip over the size slot *)
+      @ [ IMov (Reg RAX, RegIndex (RAX, R10))] (* get the value *)
     end
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = Gensym.fresh "else" in
@@ -162,11 +228,46 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       in let call_instr = 
         let n = List.length args in
         if n <= 6
-          then [ ICall (Label (name)) ]
+          then [ ICall (Label name) ]
           else let x = Int64.of_int (8 * (n-6)) in
-          [ ICall (Label (name)) ] @ [ IAdd (Reg RSP, Const x) ]
+          [ ICall (Label name) ] @ [ IAdd (Reg RSP, Const x) ]
       in caller_saved_push @ arg_instrs @ call_instr @ caller_saved_pop @ tag_type ret_type @ test_type ret_type
     end
+  | Tuple imm_list ->
+    let n = List.length imm_list
+    in let rec move_elems elems n =
+      match elems with
+      | [] -> []
+      | hd::tl ->
+        [ IComment ("store elem in slot " ^ (Int.to_string n))]
+        @ [ IMov (Reg RAX, arg_immexpr hd l_env e_env) ]
+        @ [ IMovSize ("qword", RegOffset (R15, n), Reg RAX) ]
+        @ move_elems tl (n+1)
+    in
+    [ IComment "store the size of the tuple in slot 0"]
+    @ [ IMovSize ("qword", RegOffset (R15, 0), Const (Int64.of_int n)) ]
+    @ move_elems imm_list 1
+    @ [ IMov (Reg RAX, Reg R15) ]
+    @ tag_type (CTuple [])
+    @ [ IAdd (Reg R15, Const(Int64.of_int (8 * (n+1)))) ] (* bump heap pointer *)
+  | Set (t, k, v) ->
+    [ IMov (Reg RAX, arg_immexpr k l_env e_env) ] (* index *)
+    @ test_if_number
+    @ untag_type CInt
+    @ [ IMov (Reg R10, Reg RAX) ]
+    @ [ IMov (Reg RAX, arg_immexpr t l_env e_env) ] (* tuple *)
+    @ test_if_tuple
+    @ [ IMov (Reg RAX, arg_immexpr t l_env e_env) ] (* restore tuple *)
+    @ untag_type (CTuple [])
+    @ [ IMov (Reg R11, RegOffset(RAX, 0)) ] (* get tuple size on R11 and check bounds*)
+    @ [ ICmp (Reg R10, Reg R11)]
+    @ [ IJge (Label "error_index") ]
+    @ [ ICmp (Reg R10, Const 0L) ]
+    @ [ IJl  (Label "error_index") ]
+    @ [ IAdd (Reg R10, Const 1L) ] (* finally set the value at idx+1 to skip over the size slot *)
+    @ [ IMov (Reg R11, arg_immexpr v l_env e_env) ]
+    @ [ IMovSize ("qword", RegIndex (RAX, R10), Reg R11)] (* set the value *)
+    @ tag_type (CTuple []) (* return the same tuple pointer *)
 
 and build_args args l_env e_env =
   let rec inner_rec args instrs =
@@ -184,28 +285,6 @@ and build_args args l_env e_env =
       | _ -> failwith "Negative list length"
       end
   in inner_rec args []
-
-and test_type ctype =
-  match ctype with
-  | CInt -> test_if_number
-  | CBool -> test_if_bool
-  | CAny -> []
-  | CTuple _ -> failwith "TBD"
-
-(* Untag/tag the value currently in RAX as the specified type **)
-and untag_type ctype =
-  match ctype with
-  | CInt -> [ ISar (Reg RAX, Const 1L) ]
-  | CBool -> [ IShr (Reg RAX, Const 63L) ]
-  | CAny -> []
-  | CTuple _ -> failwith "TBD"
-
-and tag_type ctype =
-  match ctype with
-  | CInt -> [ ISal (Reg RAX, Const 1L) ]
-  | CBool -> [ IShl (Reg RAX, Const 63L) ] @ [ IAdd (Reg RAX, Const 1L) ]
-  | CAny -> []
-  | CTuple _ -> failwith "TBD"
 
 (* Like build_args, but type checks each argument first *)
 and build_test_args expected_types args l_env e_env =
@@ -333,7 +412,7 @@ let compile_afundefs (fenv: afundef list) : instruction list =
   in accumulate fenv [] []
 
 let gen_prologue aexpr afenv =
-  let externs = (List.map (String.cat "\nextern") (get_external_funcs afenv)) in
+  let externs = (List.map (String.cat "\nextern ") (get_external_funcs afenv)) in
   let header = "
 section .text
 extern error" ^ (String.concat "" externs) ^ "
@@ -341,7 +420,11 @@ global our_code_starts_here
 
 our_code_starts_here:
   push RBP
-  mov RBP, RSP" in
+  mov RBP, RSP
+  mov R15, RDI
+  add R15, 7
+  mov R11, 0xfffffffffffffff8
+  and R15, R11" in
   let depth = get_depth aexpr in
   if depth = 0
     then header

@@ -43,6 +43,8 @@ and check_cexpr e afenv =
         (sprintf "Arity mismatch: %s expected %s arguments but got %s"
         f (string_of_int var_l) (string_of_int arg_l)))
     end
+  | Tuple _ -> true
+  | Set (_, _, _) -> true
   
 let check_anf aexpr afenv =
   let _ = check_aexpr aexpr afenv in
