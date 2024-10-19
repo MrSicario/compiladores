@@ -2,7 +2,6 @@ NAME: Tuple set
 DESCRIPTION: Make a tuple variable and mutate it
 SRC:
 (
-	(defsys print any -> any)
 	(get
 		(set
 			(tup (print false) -3 42)

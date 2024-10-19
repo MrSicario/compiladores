@@ -76,11 +76,22 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   | Bool b -> k (Bool b)
   | Id x -> k (Id x)
   | Prim1 (op, expr) ->
-    let tmp = Gensym.fresh "prim1" in
+    let tmp = Gensym.fresh (
+      match op with
+      | Add1 -> "add1"
+      | Sub1 -> "sub1"
+      | Not -> "not"
+      | Print -> "print") in
     anf_c expr (fun c_expr -> 
       Let (tmp, Prim1 (op, c_expr), k (Id tmp)))
   | Prim2 (op, expr1, expr2) ->
-    let tmp = Gensym.fresh "prim2" in
+    let tmp = Gensym.fresh (
+      match op with
+      | Add -> "add"
+      | Lte -> "lte"
+      | And -> "and"
+      | Or -> "or"
+      | Get -> "get") in
     anf_imm expr1 (fun imm_expr1 ->
       anf_imm expr2 (fun imm_expr2 ->
         Let (tmp, Prim2 (op, imm_expr1, imm_expr2), k (Id tmp))))
@@ -189,7 +200,8 @@ and string_of_cexpr (c : cexpr) : string =
     (match op with
     | Add1 -> "add1"
     | Sub1 -> "sub1"
-    | Not -> "not") (string_of_cexpr c)
+    | Not -> "not"
+    | Print -> "print") (string_of_cexpr c)
   | Prim2 (op, i1, i2) -> sprintf "(%s %s %s)"
     (match op with
     | Add -> "+"

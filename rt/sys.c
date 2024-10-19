@@ -11,6 +11,8 @@ const u64 BOOL_FALSE = 0x0000000000000001;
 const u64 POINTER_MASK = 0b111;
 const u64 TUPLE_TAG = 0b011;
 
+// printf("%" PRId64 "\n", result);
+
 typedef enum {
   NOT_NUMBER = 1,
   NOT_BOOLEAN = 2,
@@ -20,13 +22,6 @@ typedef enum {
 } ErrCode;
 
 extern u64 our_code_starts_here(u64 *heap) asm("our_code_starts_here");
-
-void error(ErrCode err, u64 val, u64 extra);
-
-void runtime_error(u64 val) {
-  fprintf(stderr, "Runtime error: Invalid value 0x%llx", val);
-  exit(RUNTIME);
-}
 
 char *val_to_string(u64 val) {
   char *s = NULL;
@@ -45,9 +40,9 @@ char *val_to_string(u64 val) {
     }
     asprintf(&s, "%s)", s);
   } else if ((val & (BOOL_TAG)) == 0) {
-    asprintf(&s, "%lld", (i64)val >> 1);
+    asprintf(&s, "%" PRId64, (i64)val >> 1);
   } else {
-    runtime_error(val);
+    fprintf(stderr, "Runtime error: Invalid value 0x%" PRId64 "\n", val);
   }
   return s;
 }
@@ -69,7 +64,7 @@ void error(ErrCode err, u64 val, u64 extra) {
       fprintf(stderr, "Index out of bounds: Tried to access index %s of %s", xs, vs);
       break;
     case RUNTIME:
-      runtime_error(val);
+      fprintf(stderr, "Runtime error: Invalid value 0x%" PRId64 "\n", val);
   }
   free(vs);
   free(xs);

@@ -39,6 +39,7 @@ let rec lookup_afenv : string -> afenv -> afundef =
     match fenv with
     | [] -> raise (CTError (Printf.sprintf "Undefined function: %s" s))
     | (f::fs) -> if afundef_name f = s then f else lookup_afenv s fs
+
 let get_external_funcs (fenv:afenv) =
   let rec get_external_funcs fenv r =
     match fenv with
@@ -122,8 +123,10 @@ let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) 
   match expr with
   | Let (id, c, a) ->
     let (l_env', slot) = extend_env id RBP l_env in
-    (compile_cexpr c l_env e_env fenv)
+    [ IComment ("Let [RBP - 8*" ^ (string_of_int slot) ^ "] (")]
+    @ (compile_cexpr c l_env e_env fenv)
     @ [ IMov (RegOffset (RBP, slot), Reg (RAX)) ]
+    @ [ IComment (") in")]
     @ (compile_aexpr a l_env' e_env fenv)
   | Ret c -> compile_cexpr c l_env e_env fenv
 
@@ -140,6 +143,12 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ test_if_bool
       @ [ IMov (Reg(R10), Const(Int64.sub bool_true 1L)) ] 
       @ [ IXor (Reg(RAX), Reg(R10)) ]
+    | Print ->
+      head
+      @ [ IPush (Reg RDI) ]
+      @ [ IMov (Reg RDI, Reg RAX)]
+      @ [ ICall (Label "print")]
+      @ [ IPop (Reg RDI) ]
     end
   | Prim2 (op, imm1, imm2) -> 
     let const1 = [ IMov (Reg RAX, arg_immexpr imm1 l_env e_env) ] in
@@ -402,20 +411,20 @@ let compile_afundefs (fenv: afundef list) : instruction list =
       @ [ IPop (Reg RBP) ]
       @ [ IRet ]
     | DefSys (_, _, _) -> []
-  in let rec accumulate fl fenv acc =
+  in let rec accumulate fl acc =
     match fl with
     | [] -> acc
     | hd :: tail -> 
-      let fenv' = hd :: fenv in
       let instrs = compile_afundef hd fenv in
-      accumulate tail fenv' (acc @ [ IBreak ] @ instrs)
-  in accumulate fenv [] []
+      accumulate tail (acc @ [ IBreak ] @ instrs)
+  in accumulate fenv []
 
 let gen_prologue aexpr afenv =
   let externs = (List.map (String.cat "\nextern ") (get_external_funcs afenv)) in
   let header = "
 section .text
-extern error" ^ (String.concat "" externs) ^ "
+extern error
+extern print" ^ (String.concat "" externs) ^ "
 global our_code_starts_here
 
 our_code_starts_here:

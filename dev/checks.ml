@@ -51,7 +51,7 @@ let check_anf aexpr afenv =
   aexpr
   
 let check_afundefs afundefs =
-  let rec check_declaration ls env names =
+  let rec check_declaration global ls names =
     match ls with
     | [] -> true
     | hd::tl ->
@@ -60,18 +60,16 @@ let check_afundefs afundefs =
         if List.mem n names then
           raise (CTError (sprintf "Function already declared in namespace: %s" n))
         else 
-          if check_aexpr e env then
-            let env' = hd::env in
-            let names' = n::names in
-            check_declaration tl env' names'
+          let names' = n::names in
+          if check_aexpr e global then
+            check_declaration global tl names'
           else false
       | DefSys (n, _, _) ->
         if List.mem n names then
           raise (CTError (sprintf "Function already declared in namespace: %s" n))
         else
-          let env' = hd :: env in
           let names' = n::names in
-          check_declaration tl env' names'
+          check_declaration global tl names'
       end
-  in let _ = check_declaration afundefs [] [] in
+  in let _ = check_declaration afundefs afundefs [] in
   afundefs

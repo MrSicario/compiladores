@@ -1,6 +1,5 @@
 NAME: Order declaration order error
-DESCRIPTION: Throws an error because user-defined functions are badly declared
-STATUS: CT error
+DESCRIPTION: Functions are on a global environment, so declaration order doesn't matter
 SRC:
 (
     (def (f x y) (if (gt x y) x y))
@@ -9,4 +8,4 @@ SRC:
     (add2 (f (add2 2) 2))
 )
 EXPECTED:
-.*Undefined function.*
+6
