@@ -445,7 +445,7 @@ our_code_starts_here:
   if depth = 0
     then header
     else header ^ "
-  sub RSP, 8*" ^ string_of_int depth
+  sub RSP, 8*" ^ string_of_int (if depth mod 2 == 0 then depth else depth + 1)
 
 let compile_prog (p : prog) : string =
   let f, e = p in
@@ -453,7 +453,6 @@ let compile_prog (p : prog) : string =
   let aexpr = check_anf (anf_expr e) afenv in
   let instrs = compile_aexpr aexpr empty_env empty_env afenv in
   let fun_instrs = compile_afundefs afenv in
-  let _ = print_string (string_of_aexpr aexpr ^ "\n") in
   let prologue = gen_prologue aexpr afenv in
   let epilogue ="
   mov RSP, RBP
