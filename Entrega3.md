@@ -1,0 +1,1 @@
+Implementar pattern matching mediante azucar sintactico fue bastante simple, en parte gracias a haber tenido lista la transformación a ANF lista desde antes.
