@@ -127,6 +127,18 @@ let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) 
     @ [ IMov (RegOffset (RBP, slot), Reg (RAX)) ]
     @ [ IComment (") in")]
     @ (compile_aexpr a l_env' e_env fenv)
+  | If (cond_expr, then_expr, else_expr) ->
+    let else_label = Gensym.fresh "else" in
+    let done_label = Gensym.fresh "done" in
+    [ IMov (Reg RAX, arg_immexpr cond_expr l_env e_env) ]
+    @ test_if_bool
+    @ [ ICmp (Reg RAX, Const (bool_false)) ]
+    @ [ IJe  (Label else_label) ]
+    @ (compile_aexpr then_expr l_env e_env fenv)
+    @ [ IJmp (Label done_label) ]
+    @ [ ILabel (Label else_label) ]
+    @ (compile_aexpr else_expr l_env e_env fenv)
+    @ [ ILabel (Label done_label)]
   | Ret c -> compile_cexpr c l_env e_env fenv
 
 and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : instruction list =
@@ -204,18 +216,6 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ [ IAdd (Reg R10, Const 1L) ] (* finally get the value at idx+1 to skip over the size slot *)
       @ [ IMov (Reg RAX, RegIndex (RAX, R10))] (* get the value *)
     end
-  | If (cond_expr, then_expr, else_expr) ->
-    let else_label = Gensym.fresh "else" in
-    let done_label = Gensym.fresh "done" in
-    [ IMov (Reg RAX, arg_immexpr cond_expr l_env e_env) ]
-    @ test_if_bool
-    @ [ ICmp (Reg RAX, Const (bool_false)) ]
-    @ [ IJe  (Label else_label) ]
-    @ (compile_cexpr then_expr l_env e_env fenv)
-    @ [ IJmp (Label done_label) ]
-    @ [ ILabel (Label else_label) ]
-    @ (compile_cexpr else_expr l_env e_env fenv)
-    @ [ ILabel (Label done_label)]
   | Apply (name, args) ->
     let caller_saved_push =
       [ IPush (Reg R9) ]
@@ -445,7 +445,7 @@ our_code_starts_here:
   if depth = 0
     then header
     else header ^ "
-  sub RSP, 8*" ^ string_of_int (if depth mod 2 == 0 then depth else depth + 1)
+  sub RSP, 8*" ^ string_of_int (depth + depth mod 2)
 
 let compile_prog (p : prog) : string =
   let f, e = p in

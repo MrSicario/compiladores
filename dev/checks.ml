@@ -16,6 +16,8 @@ let rec check_aexpr e afenv =
   match e with
   | Let (_, bound_expr, body_expr) ->
     check_cexpr bound_expr afenv && check_aexpr body_expr afenv
+  | If (_, then_expr, else_expr) ->
+    check_aexpr then_expr afenv && check_aexpr else_expr afenv
   | Ret (cexpr) -> check_cexpr cexpr afenv
 
 and check_cexpr e afenv =
@@ -23,7 +25,6 @@ and check_cexpr e afenv =
   | Atom _ -> true
   | Prim1 (_, cexpr) -> check_cexpr cexpr afenv
   | Prim2 (_, _, _) -> true
-  | If (_, cexpr1, cexpr2) -> check_cexpr cexpr1 afenv && check_cexpr cexpr2 afenv
   | Apply (f, args) ->
     begin match lookup_afenv f afenv with
     | DefFun (_, vars, _) ->

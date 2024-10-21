@@ -6,13 +6,13 @@ open Gensym
 
 type aexpr =
   | Let of string * cexpr * aexpr
+  | If of immexpr * aexpr * aexpr
   | Ret of cexpr
 
 and cexpr =
   | Atom of immexpr
   | Prim1 of prim1 * cexpr
   | Prim2 of prim2 * immexpr * immexpr
-  | If of immexpr * cexpr * cexpr
   | Apply of string * immexpr list
   | Tuple of immexpr list
   | Set of immexpr * immexpr * immexpr
@@ -46,9 +46,7 @@ let rec anf_aexpr (expr : expr) : aexpr =
       Let (id, Atom imm_expr, anf_aexpr body_expr))
   | If (cond_expr, t_expr, f_expr) ->
     anf_imm cond_expr (fun imm_expr ->
-      anf_c t_expr (fun c_expr1 ->
-        anf_c f_expr (fun c_expr2 ->
-          Ret (If (imm_expr, c_expr1, c_expr2)))))
+      (If (imm_expr, anf_aexpr t_expr, anf_aexpr f_expr)))
   | Apply (name, expr_l) ->
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
@@ -97,13 +95,10 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
         Let (tmp, Prim2 (op, imm_expr1, imm_expr2), k (Id tmp))))
   | Let (id, bound_expr, body_expr) ->
     anf_imm bound_expr (fun imm_expr ->
-      Let (id, Atom imm_expr, anf_imm body_expr (fun imm_expr -> k imm_expr)))
+      Let (id, Atom imm_expr, anf_imm body_expr k))
   | If (cond_expr, then_expr, else_expr) ->
-    let tmp = Gensym.fresh "if" in
     anf_imm cond_expr (fun imm_expr ->
-      anf_c then_expr (fun c_expr1 ->
-        anf_c else_expr (fun c_expr2 ->
-          Let (tmp, If (imm_expr, c_expr1, c_expr2), k (Id tmp)))))
+      If (imm_expr, anf_imm then_expr k , anf_imm else_expr k))
   | Apply (name, expr) -> 
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
@@ -141,12 +136,10 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
         k (Prim2 (op, imm_expr1, imm_expr2))))
   | Let (id, bound_expr, body_expr) ->
     anf_c bound_expr (fun c_expr ->
-    Let (id, c_expr, anf_c body_expr (fun c_expr -> k c_expr)))
+    Let (id, c_expr, anf_c body_expr k))
   | If (cond_expr, then_expr, else_expr) ->
     anf_imm cond_expr (fun imm_expr ->
-      anf_c then_expr (fun c_expr1 ->
-        anf_c else_expr (fun c_expr2 ->
-          k (If (imm_expr, c_expr1, c_expr2)))))
+      If (imm_expr, anf_c then_expr k, anf_c else_expr k))
   | Apply (name, expr_list) ->
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
@@ -184,6 +177,7 @@ let get_depth aexpr =
     match aexpr with
     | Ret _ -> acc
     | Let (_, _, aexpr) -> count aexpr (acc + 1)
+    | If (_, t_branch, f_branch) -> max (count t_branch acc) (count f_branch acc)
   in count aexpr 0
 
 let rec string_of_aexpr (a : aexpr) : string =
@@ -192,6 +186,10 @@ let rec string_of_aexpr (a : aexpr) : string =
     sprintf "(let (%s %s) %s)" 
     id (string_of_cexpr c) (string_of_aexpr a)
   | Ret c -> sprintf "(ret %s)" (string_of_cexpr c)
+  | If (icond, athen, aelse) -> sprintf "(if %s %s %s)" 
+    (string_of_immexpr icond) 
+    (string_of_aexpr athen)
+    (string_of_aexpr aelse)
 
 and string_of_cexpr (c : cexpr) : string =
   match c with
@@ -209,10 +207,6 @@ and string_of_cexpr (c : cexpr) : string =
     | Or -> "or"
     | Lte -> "<="
     | Get -> "get") (string_of_immexpr i1) (string_of_immexpr i2)
-  | If (icond, cthen, celse) -> sprintf "(if %s %s %s)" 
-    (string_of_immexpr icond) 
-    (string_of_cexpr cthen)
-    (string_of_cexpr celse)
   | Apply (name, args) -> sprintf "(%s (%s))"
     name
     (String.concat " " (List.map string_of_immexpr args))
