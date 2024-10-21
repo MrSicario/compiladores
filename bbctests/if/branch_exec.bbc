@@ -1,7 +1,8 @@
 NAME: if_branch_exec
-DESCRIPTION: a condition with a runtime invalid expression on the non-executing branch
+DESCRIPTION: Doesn't print the value from the non-evaluating function
 STATUS: No error
 SRC:
-(if false (and 2 3) 13)
+(if false (print 1) (print 2))
 EXPECTED:
-13
+> 2
+2

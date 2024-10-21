@@ -46,7 +46,7 @@ let rec anf_aexpr (expr : expr) : aexpr =
       Let (id, Atom imm_expr, anf_aexpr body_expr))
   | If (cond_expr, t_expr, f_expr) ->
     anf_imm cond_expr (fun imm_expr ->
-      (If (imm_expr, anf_aexpr t_expr, anf_aexpr f_expr)))
+      If (imm_expr, anf_aexpr t_expr, anf_aexpr f_expr))
   | Apply (name, expr_l) ->
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))

@@ -122,10 +122,8 @@ let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) 
   match expr with
   | Let (id, c, a) ->
     let (l_env', slot) = extend_env id RBP l_env in
-    [ IComment ("Let " ^ id ^": [RBP - 8*" ^ (string_of_int slot) ^ "] (")]
-    @ (compile_cexpr c l_env e_env fenv)
+    (compile_cexpr c l_env e_env fenv)
     @ [ IMov (RegOffset (RBP, slot), Reg (RAX)) ]
-    @ [ IComment (") in")]
     @ (compile_aexpr a l_env' e_env fenv)
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = Gensym.fresh "else" in
