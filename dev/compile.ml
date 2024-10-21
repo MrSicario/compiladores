@@ -88,7 +88,6 @@ let test_type ctype =
     | CBool -> test_if_bool
     | CAny -> []
     | CTuple _ -> test_if_tuple
-  
 
 let error_handlers =
   let error_not_number =
@@ -145,10 +144,20 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ [ IXor (Reg(RAX), Reg(R10)) ]
     | Print ->
       head
+      @ [ IPush (Reg R9) ]
+      @ [ IPush (Reg R8) ]
+      @ [ IPush (Reg RCX) ]
+      @ [ IPush (Reg RDX) ]
+      @ [ IPush (Reg RSI) ]
       @ [ IPush (Reg RDI) ]
       @ [ IMov (Reg RDI, Reg RAX)]
       @ [ ICall (Label "print")]
       @ [ IPop (Reg RDI) ]
+      @ [ IPop (Reg RSI) ]
+      @ [ IPop (Reg RDX) ]
+      @ [ IPop (Reg RCX) ]
+      @ [ IPop (Reg R8) ]
+      @ [ IPop (Reg R9) ]
     end
   | Prim2 (op, imm1, imm2) -> 
     let const1 = [ IMov (Reg RAX, arg_immexpr imm1 l_env e_env) ] in
@@ -317,8 +326,6 @@ and build_test_args expected_types args l_env e_env =
       | _ -> failwith "Negative argument count"
       end
   in inner_rec expected_types args [] 0
-
-
 
 and arg_immexpr (expr : immexpr) (l_env : env) (e_env : env) : arg =
   match expr with
