@@ -1,4 +1,1 @@
-(let 
-    (t (tup (tup) true 42)) 
-    t
-)
+(tup (lambda () true) (lambda (x y) (+ x y)))
