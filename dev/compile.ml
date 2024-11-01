@@ -424,36 +424,35 @@ let compile_afundefs (fenv: afundef list) : instruction list =
       accumulate tail (acc @ [ IBreak ] @ instrs)
   in accumulate fenv []
 
-let gen_prologue aexpr afenv =
+let gen_prologue afenv =
   let externs = (List.map (String.cat "\nextern ") (get_external_funcs afenv)) in
   let header = "
 section .text
 extern error
 extern print" ^ (String.concat "" externs) ^ "
-global our_code_starts_here
-
-our_code_starts_here:
-  push RBP
-  mov RBP, RSP
-  mov R15, RDI
-  add R15, 7
-  mov R11, 0xfffffffffffffff8
-  and R15, R11" in
-  let depth = get_depth aexpr in
-  if depth = 0
-    then header
-    else header ^ "
-  sub RSP, 8*" ^ string_of_int (depth + depth mod 2)
+global our_code_starts_here" in header
 
 let compile_prog (p : prog) : string =
   let f, e = p in
   let afenv = check_afundefs (List.map anf_fundef f) in
   let aexpr = check_anf (anf_expr e) afenv in
   let instrs = compile_aexpr aexpr empty_env empty_env afenv in
-  let fun_instrs = compile_afundefs afenv in
-  let prologue = gen_prologue aexpr afenv in
+  let functions = pp_instrs (compile_afundefs afenv) ^ "\n" in
+  let prologue = gen_prologue afenv in
+  let body = "
+our_code_starts_here:
+  push RBP
+  mov RBP, RSP
+  mov R15, RDI
+  add R15, 7
+  mov R11, 0xfffffffffffffff8
+  and R15, R11" ^ (let depth = get_depth aexpr in
+  if depth = 0
+    then ""
+    else "
+  sub RSP, 8*" ^ string_of_int (depth + depth mod 2)) ^ pp_instrs instrs in
   let epilogue ="
   mov RSP, RBP
   pop RBP
   ret" in
-  prologue ^ pp_instrs instrs ^ epilogue ^ pp_instrs fun_instrs ^ "\n" ^ error_handlers
+  prologue ^ functions ^ body ^ epilogue ^ "\n" ^ error_handlers
