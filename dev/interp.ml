@@ -61,6 +61,12 @@ let bool_of_value (v : value) : bool =
    They throw a runtime type error if any of the received arguments is ill-typed,
    reporting the first infringing value (from left to right) if there are multiple.
 *)
+let liftBB : (bool -> bool) -> value -> value =
+  fun op e ->
+    match e with
+    | BoolV b -> BoolV (op b)
+    | _ -> raise_type_error "boolean" e
+
 let liftIII : (int64 -> int64 -> int64) -> value -> value -> value =
   fun op e1 e2 ->
     match e1, e2 with

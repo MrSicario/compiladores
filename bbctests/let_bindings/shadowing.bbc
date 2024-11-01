@@ -1,0 +1,6 @@
+NAME: Shadowing
+DESCRIPTION: tests variable shadowing
+SRC:
+(let (somevar 9) (let (somevar 8) somevar))
+EXPECTED:
+8

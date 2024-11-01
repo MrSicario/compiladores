@@ -16,11 +16,13 @@ and cexpr =
   | Apply of string * immexpr list
   | Tuple of immexpr list
   | Set of immexpr * immexpr * immexpr
-
+  | LamApply of immexpr * immexpr list
+  
 and immexpr =
   | Num of int64
   | Bool of bool
   | Id of string
+  | Lambda of string list * aexpr
 
 type afundef =
   | DefFun of string * string list * aexpr
@@ -50,11 +52,9 @@ let rec anf_aexpr (expr : expr) : aexpr =
   | Apply (name, expr_l) ->
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
-    in
-    let base vs =
+    in let base vs =
       Ret (Apply (name, List.rev vs))
-    in
-    List.fold_right acc_let expr_l base []
+    in List.fold_right acc_let expr_l base []
   | Tuple expr_list ->
     let accum expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
@@ -66,6 +66,14 @@ let rec anf_aexpr (expr : expr) : aexpr =
       anf_imm e2 (fun imm_expr2 ->
         anf_imm e3 (fun imm_expr3 ->
           Ret (Set (imm_expr1, imm_expr2, imm_expr3)))))
+  | Lambda (params, expr) -> Ret (Atom (Lambda (params, anf_aexpr expr)))
+  | LamApply (closure,  args) -> 
+    let acc_let expr k vs =
+      anf_imm expr (fun imm_expr -> k (imm_expr :: vs))
+    in let base vs = 
+      anf_imm closure (fun imm_expr -> Ret (LamApply (imm_expr, List.rev vs)))
+    in List.fold_right acc_let args base []
+  | LetRec (_, _) -> failwith "TBD"
 
 
 and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
@@ -73,6 +81,7 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   | Num n -> k (Num n)
   | Bool b -> k (Bool b)
   | Id x -> k (Id x)
+  | Lambda (params, expr) -> k (Lambda (params, anf_aexpr expr))
   | Prim1 (op, expr) ->
     let tmp = Gensym.fresh (
       match op with
@@ -102,12 +111,10 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
   | Apply (name, expr) -> 
     let acc_let expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
-    in
-    let base vs =
+    in let base vs =
       let id = Gensym.fresh name in
       Let (id, Apply (name, List.rev vs), k (Id id))
-    in
-    List.fold_right acc_let expr base []
+    in List.fold_right acc_let expr base []
   | Tuple expr_list ->
     let accum expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
@@ -121,12 +128,21 @@ and anf_imm (expr : expr) (k : immexpr -> aexpr) : aexpr =
       anf_imm e2 (fun imm_expr2 ->
         anf_imm e3 (fun imm_expr3 ->
           Let (tmp, Set (imm_expr1, imm_expr2, imm_expr3), k (Id tmp)))))
+  | LamApply (closure, args) -> 
+    let acc_let expr ctx vs =
+      anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
+    in let base vs =
+      let id = Gensym.fresh "lambda" in
+      anf_imm closure (fun imm_expr -> Let (id, LamApply (imm_expr, List.rev vs), k (Id id)))
+    in List.fold_right acc_let args base []
+  | LetRec (_, _) -> failwith "TBD"
           
 and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
   match expr with
   | Num n -> k (Atom (Num n))
   | Bool b -> k (Atom (Bool b))
   | Id x -> k (Atom (Id x))
+  | Lambda (params, expr) -> k (Atom (Lambda (params, anf_aexpr expr)))
   | Prim1 (op, expr) ->
     anf_c expr (fun c_expr ->
       k (Prim1 (op, c_expr)))
@@ -146,8 +162,7 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
     in let base vs =
       let id = Gensym.fresh name in
       Let (id, Apply (name, List.rev vs), k (Atom (Id id)))
-    in
-    List.fold_right acc_let expr_list base []
+    in List.fold_right acc_let expr_list base []
   | Tuple expr_list ->
     let accum expr ctx vs =
       anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
@@ -159,6 +174,14 @@ and anf_c (expr: expr) (k : cexpr -> aexpr) : aexpr =
       anf_imm e2 (fun imm_expr2 ->
         anf_imm e3 (fun imm_expr3 ->
           k (Set (imm_expr1, imm_expr2, imm_expr3)))))
+  | LamApply (closure, args) ->
+    let acc_let expr ctx vs =
+      anf_imm expr (fun imm_expr -> ctx (imm_expr :: vs))
+    in let base vs =
+      let id = Gensym.fresh "lambda" in
+      anf_imm closure (fun imm_expr -> Let (id, LamApply (imm_expr, List.rev vs), k (Atom (Id id))))
+    in List.fold_right acc_let args base []
+  | LetRec (_, _) -> failwith "TBD"
 
 let anf_expr (expr : expr) : aexpr =
   let masked_expr = alpha_rename_expr expr Env.empty in
@@ -185,7 +208,7 @@ let rec string_of_aexpr (a : aexpr) : string =
   | Let (id, c, a) -> 
     sprintf "(let (%s %s) %s)" 
     id (string_of_cexpr c) (string_of_aexpr a)
-  | Ret c -> sprintf "(ret %s)" (string_of_cexpr c)
+  | Ret c -> sprintf "%s" (string_of_cexpr c)
   | If (icond, athen, aelse) -> sprintf "(if %s %s %s)" 
     (string_of_immexpr icond) 
     (string_of_aexpr athen)
@@ -212,12 +235,15 @@ and string_of_cexpr (c : cexpr) : string =
     (String.concat " " (List.map string_of_immexpr args))
   | Tuple expr_list -> sprintf ("(tup %s)") (String.concat " " (List.map string_of_immexpr expr_list))
   | Set (e1, e2, e3) -> sprintf ("(set %s %s %s)") (string_of_immexpr e1) (string_of_immexpr e2) (string_of_immexpr e3)
+  | LamApply (lambda, args) -> sprintf ("(@ %s %s)") (string_of_immexpr lambda) (String.concat "" (List.map string_of_immexpr args))
+
 
 and string_of_immexpr (i : immexpr) : string =
   match i with
   | Num n -> Int64.to_string n
   | Bool b -> if b then "true" else "false"
   | Id s -> s
+  | Lambda (params, expr) -> sprintf ("(lambda (%s) (%s))") (String.concat " " params) (string_of_aexpr expr)
 
 let string_of_afundef(d : afundef) : string =
   match d with

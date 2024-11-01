@@ -1,6 +1,6 @@
 NAME: Function arity < error
 DESCRIPTION: Throws an arity mismatch error because user passed less arguments than expected
-STATUS: CT error
+STATUS: RT error
 SRC:
 (
     (def (gt x y) (not (<= x y)))

@@ -11,8 +11,9 @@ let bool_false = 1L (* 0b0...1 *)
 let min_int = Int64.div Int64.min_int 2L
 let max_int = Int64.div Int64.max_int 2L
 
-let pointer_mask = 0b111L
-let tuple_tag = 0b011L
+let pointer_mask = 0x7L
+let tuple_tag = 0x3L
+let closure_tag = 0x5L
 
 (* Lexical Environment *)
 type env = (string * (reg * int)) list
@@ -249,6 +250,7 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
           [ ICall (Label name) ] @ [ IAdd (Reg RSP, Const x) ]
       in caller_saved_push @ arg_instrs @ call_instr @ caller_saved_pop @ tag_type ret_type @ test_type ret_type
     end
+  | LamApply (_ (*lambda*), _ (*args*)) -> failwith "TBD"
   | Tuple imm_list ->
     let n = List.length imm_list
     in let rec move_elems elems n =
@@ -336,6 +338,7 @@ and arg_immexpr (expr : immexpr) (l_env : env) (e_env : env) : arg =
   | Id x -> 
     let reg, n = lookup_env x l_env e_env in
     if n = 0 then Reg reg else RegOffset (reg, n)
+  | Lambda (_(*params*), _(* expr *)) -> failwith "TBD"
 
 and and_immexpr (expr : immexpr) (l_env : env) (e_env : env) : instruction list =
   let done_label = Gensym.fresh "and" in

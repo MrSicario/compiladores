@@ -70,11 +70,6 @@ let test_parse_fork () =
   (parse_exp (`List [`Atom "if" ; `Atom "true" ; `Atom "1" ; `Atom "0"])) 
   (If (Bool true, Num 1L, Num 0L))
 
-let test_parse_let () =
-  check exp "declaration applies"
-  (parse_exp (`List [`Atom "let" ; `List [`Atom "x" ; `Atom "1"] ; `List [`Atom "let" ; `List [`Atom "y" ; `Atom "7"] ; `Atom "10"] ])) 
-  (Let ("x", Num 1L, Let ("y", Num 7L, Num 10L)))
-
 let test_parse_lambda_empty () =
   check exp "empty params lambda is parsed"
   (parse_exp (`List [`Atom "lambda" ; `List [] ; `Atom "1"])) 

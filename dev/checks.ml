@@ -25,6 +25,7 @@ and check_cexpr e afenv =
   | Atom _ -> true
   | Prim1 (_, cexpr) -> check_cexpr cexpr afenv
   | Prim2 (_, _, _) -> true
+  (* TBD: Move arity checks to runtime *)
   | Apply (f, args) ->
     begin match lookup_afenv f afenv with
     | DefFun (_, vars, _) ->
@@ -44,6 +45,7 @@ and check_cexpr e afenv =
         (sprintf "Arity mismatch: %s expected %s arguments but got %s"
         f (string_of_int var_l) (string_of_int arg_l)))
     end
+  | LamApply (_, _) -> true
   | Tuple _ -> true
   | Set (_, _, _) -> true
   
