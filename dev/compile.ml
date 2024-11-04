@@ -10,10 +10,9 @@ let bool_true = 0x8000000000000001L (* 0b10...01 *)
 let bool_false = 1L (* 0b0...1 *)
 let min_int = Int64.div Int64.min_int 2L
 let max_int = Int64.div Int64.max_int 2L
-
-let pointer_mask = 0x7L
-let tuple_tag = 0x3L
-let closure_tag = 0x5L
+let tuple_tag = 0x3L (* 0b11 *)
+let closure_tag = 0x5L (* 0b101 *)
+let pointer_mask = 0x7L (* 0b111 *)
 
 (* Lexical Environment *)
 type env = (string * (reg * int)) list
@@ -183,21 +182,49 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ [ IMov (Reg RAX, Reg R10) ]
       @ [ IAdd (Reg RAX, arg_immexpr imm2 l_env e_env) ]
     | And -> 
+      let done_label = Gensym.fresh "and" in
       const1
       @ test_if_bool
-      @ (and_immexpr imm2 l_env e_env)
+      @ [ IMov (Reg R10, Const bool_false) ]
+      @ [ ICmp (Reg RAX, Reg R10) ]
+      @ [ IJe (Label done_label) ] (* if arg0 is false -> false *)
+      @ [ IMov (Reg RAX, arg_immexpr imm2 l_env e_env) ]
+      @ test_if_bool
+      @ [ ICmp (Reg RAX, Reg R10) ]
+      @ [ IJe (Label done_label) ] (* if arg1 is false -> false*)
+      @ [ IMov (Reg RAX, Const bool_true) ] (* else -> true *)
+      @ [ ILabel (Label done_label) ]
     | Or -> 
+      let done_label = Gensym.fresh "or" in
       const1
       @ test_if_bool 
-      @ (or_immexpr imm2 l_env e_env)
+      @ [ IMov (Reg R10, Const bool_true) ]
+      @ [ ICmp (Reg RAX, Reg R10) ]
+      @ [ IJe (Label done_label) ]
+      @ [ IMov (Reg R10, Reg RAX) ]
+      @ [ IMov (Reg RAX, arg_immexpr imm2 l_env e_env) ]
+      @ test_if_bool
+      @ [ ICmp (Reg RAX, Reg R10) ]
+      @ [ IJe (Label done_label) ]
+      @ [ IMov (Reg RAX, Const bool_true) ]
+      @ [ ILabel (Label done_label) ]
     | Lte -> 
+      let lte_label = Gensym.fresh "lte" in
+      let done_label = Gensym.fresh "ltedone" in
       const1
       @ test_if_number
       @ [ IMov (Reg R10, Reg RAX) ]
       @ const2
       @ test_if_number
       @ [ IMov (Reg RAX, Reg R10) ]
-      @ (lte_immexpr imm2 l_env e_env)
+      @ [ IMov (Reg R10, arg_immexpr imm2 l_env e_env)]
+      @ [ ICmp (Reg RAX, Reg R10) ]
+      @ [ IJle (Label lte_label) ]
+      @ [ IMov (Reg RAX, Const bool_false) ]
+      @ [ IJmp (Label done_label)]
+      @ [ ILabel (Label lte_label) ]
+      @ [ IMov (Reg RAX, Const bool_true) ]
+      @ [ ILabel (Label done_label) ]
     | Get ->
       const2 (* index *)
       @ test_if_number
@@ -339,43 +366,6 @@ and arg_immexpr (expr : immexpr) (l_env : env) (e_env : env) : arg =
     let reg, n = lookup_env x l_env e_env in
     if n = 0 then Reg reg else RegOffset (reg, n)
   | Lambda (_(*params*), _(* expr *)) -> failwith "TBD"
-
-and and_immexpr (expr : immexpr) (l_env : env) (e_env : env) : instruction list =
-  let done_label = Gensym.fresh "and" in
-  [ IMov (Reg R10, Const bool_false) ]
-  @ [ ICmp (Reg RAX, Reg R10) ]
-  @ [ IJe (Label done_label) ] (* if arg0 is false -> false *)
-  @ [ IMov (Reg RAX, arg_immexpr expr l_env e_env) ]
-  @ test_if_bool
-  @ [ ICmp (Reg RAX, Reg R10) ]
-  @ [ IJe (Label done_label) ] (* if arg1 is false -> false*)
-  @ [ IMov (Reg RAX, Const bool_true) ] (* else -> true *)
-  @ [ ILabel (Label done_label) ]
-
-and or_immexpr (expr : immexpr) (l_env : env) (e_env : env) : instruction list =
-  let done_label = Gensym.fresh "or" in
-  [ IMov (Reg R10, Const bool_true) ]
-  @ [ ICmp (Reg RAX, Reg R10) ]
-  @ [ IJe (Label done_label) ]
-  @ [ IMov (Reg R10, Reg RAX) ]
-  @ [ IMov (Reg RAX, arg_immexpr expr l_env e_env) ]
-  @ test_if_bool
-  @ [ ICmp (Reg RAX, Reg R10) ]
-  @ [ IJe (Label done_label) ]
-  @ [ IMov (Reg RAX, Const bool_true) ]
-  @ [ ILabel (Label done_label) ]
-
-and lte_immexpr (expr : immexpr) (l_env : env) (e_env : env) : instruction list =
-  let lte_label = Gensym.fresh "lte" in
-  let done_label = Gensym.fresh "ltedone" in
-  [ IMov (Reg R10, arg_immexpr expr l_env e_env)]
-  @ [ ICmp (Reg RAX, Reg R10) ]
-  @ [ IJle (Label lte_label) ]
-  @ [ IMov (Reg RAX, Const bool_false) ]
-  @ [ IJmp (Label done_label)]
-  @ [ ILabel (Label lte_label) ]
-  @ [ IMov (Reg RAX, Const bool_true) ]
-  @ [ ILabel (Label done_label) ]
 
 let compile_afundefs (fenv: afundef list) : instruction list =
   let rec gen_64bits_env l env =
