@@ -4,16 +4,17 @@ open Anf
 open Gensym
 open Parse
 open Checks
+open Printf
 
 (* Compile constants *)
-let bool_true = 0x8000000000000001L (* 0b10...01 *)
-let bool_false = 1L (* 0b0...1 *)
+let bool_true = 0x8000000000000001L (* 0b1...001 *)
+let bool_false = 0x1L (* 0b01...1 *)
 let min_int = Int64.div Int64.min_int 2L
 let max_int = Int64.div Int64.max_int 2L
-let tuple_tag = 0x3L (* 0b11 *)
-let closure_tag = 0x5L (* 0b101 *)
-let pointer_mask = 0x7L (* 0b111 *)
-
+let bool_tag = 0b001L
+let tuple_tag = 0b011L
+let closure_tag = 0b101L
+let pointer_mask = 0b111L
 (* Lexical Environment *)
 type env = (string * (reg * int)) list
 let empty_env = []
@@ -24,12 +25,12 @@ let extend_env (name : string) (reg : reg) (env : env) : (env * int) =
 let lookup_env (name : string) (l_env : env) (e_env : env) : reg * int =
   let rec lookup_env (name : string) (env : env) : reg * int =
     match env with
-    | [] -> raise (CTError (Printf.sprintf "Free identifier: %s" name))
+    | [] -> raise (CTError (sprintf "Free identifier: %s" name))
     | (n, (reg, i))::tail ->
       if n = name then (reg, i) else (lookup_env name tail)
   in if List.mem_assoc name l_env then lookup_env name l_env
   else if List.mem_assoc name e_env then lookup_env name e_env
-  else raise (CTError (Printf.sprintf "Free identifier: %s" name))
+  else raise (CTError (sprintf "Free identifier: %s" name))
 
 (* Function Environment *)
 type afenv = afundef list
@@ -37,7 +38,7 @@ let empty_afenv : afenv = []
 let rec lookup_afenv : string -> afenv -> afundef =
   fun s fenv -> 
     match fenv with
-    | [] -> raise (CTError (Printf.sprintf "Undefined function: %s" s))
+    | [] -> raise (CTError (sprintf "Undefined function: %s" s))
     | (f::fs) -> if afundef_name f = s then f else lookup_afenv s fs
 
 let get_external_funcs (fenv:afenv) =
@@ -73,14 +74,20 @@ let test_if_number =
   @ [ IJnz (Label "error_not_number") ]
 
 let test_if_bool =
-  [ ITest (Reg RAX, Const 1L) ]
-  @ [ IJz (Label "error_not_bool") ]
+  [ IMov (Reg R11, Reg RAX) ]
+  @ [ IAnd (Reg R11, Const pointer_mask) ]
+  @ [ ICmp (Reg R11, Const bool_tag) ]
+  @ [ IJne (Label "error_not_bool") ]
 
 (* destructive*)
 let test_if_tuple =
   [ IAnd (Reg RAX, Const (pointer_mask)) ]
   @ [ ICmp (Reg RAX, Const (tuple_tag)) ]
   @ [ IJne  (Label "error_not_tuple") ]
+
+let test_arity =
+  [ ICmp (Reg R10, Reg R11) ]
+  @ [IJne (Label "error_arity_mismatch")]
 
 let test_type ctype =
     match ctype with
@@ -116,7 +123,14 @@ let error_handlers =
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDX, Reg R10) ]
     @ [ ICall (Label "error") ]
-  in String.concat "\n" (List.map pp_instrs [error_not_number ; error_not_bool ; error_not_tuple ; error_index])
+  in
+  let error_arity_mismatch =
+    [ ILabel (Label "error_arity_mismatch") ]
+    @ [ IMov (Reg RDI, Const 4L) ]
+    @ [ IMov (Reg RSI, Reg R10) ]
+    @ [ IMov (Reg RDX, Reg R11) ]
+    @ [ ICall (Label "error") ]
+  in String.concat "\n" (List.map pp_instrs [error_not_number ; error_not_bool ; error_not_tuple ; error_index; error_arity_mismatch])
 
 let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) : instruction list =
   match expr with
@@ -128,7 +142,7 @@ let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) 
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = Gensym.fresh "else" in
     let done_label = Gensym.fresh "done" in
-    [ IMov (Reg RAX, arg_immexpr cond_expr l_env e_env) ]
+    compile_immexpr cond_expr l_env e_env
     @ test_if_bool
     @ [ ICmp (Reg RAX, Const (bool_false)) ]
     @ [ IJe  (Label else_label) ]
@@ -141,12 +155,12 @@ let rec compile_aexpr (expr : aexpr) (l_env : env) (e_env : env) (fenv : afenv) 
 
 and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : instruction list =
   match expr with
-  | Atom i -> [ IMov (Reg RAX, arg_immexpr i l_env e_env) ]
+  | Atom i -> compile_immexpr i l_env e_env
   | Prim1 (op, c) -> 
     let head = compile_cexpr c l_env e_env fenv in
     begin match op with
-    | Add1 -> head @ test_if_number @ [ IAdd (Reg(RAX), arg_immexpr (Num 1L) empty_env e_env) ]
-    | Sub1 -> head @ test_if_number @ [ ISub (Reg(RAX), arg_immexpr (Num 1L) empty_env e_env) ]
+    | Add1 -> head @ test_if_number @ [ IAdd (Reg(RAX), Const 0b10L) ]
+    | Sub1 -> head @ test_if_number @ [ ISub (Reg(RAX), Const 0b10L) ]
     | Not -> 
       head 
       @ test_if_bool
@@ -170,25 +184,24 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ [ IPop (Reg R9) ]
     end
   | Prim2 (op, imm1, imm2) -> 
-    let const1 = [ IMov (Reg RAX, arg_immexpr imm1 l_env e_env) ] in
-    let const2 = [ IMov (Reg RAX, arg_immexpr imm2 l_env e_env) ] in
+    let instr1 = compile_immexpr imm1 l_env e_env in
+    let instr2 = compile_immexpr imm2 l_env e_env in
     begin match op with
     | Add -> 
-      const1
+      instr2
       @ test_if_number
       @ [ IMov (Reg R10, Reg RAX) ]
-      @ const2
+      @ instr1
       @ test_if_number
-      @ [ IMov (Reg RAX, Reg R10) ]
-      @ [ IAdd (Reg RAX, arg_immexpr imm2 l_env e_env) ]
+      @ [ IAdd (Reg RAX, Reg R10) ]
     | And -> 
       let done_label = Gensym.fresh "and" in
-      const1
+      instr1
       @ test_if_bool
       @ [ IMov (Reg R10, Const bool_false) ]
       @ [ ICmp (Reg RAX, Reg R10) ]
       @ [ IJe (Label done_label) ] (* if arg0 is false -> false *)
-      @ [ IMov (Reg RAX, arg_immexpr imm2 l_env e_env) ]
+      @ instr2
       @ test_if_bool
       @ [ ICmp (Reg RAX, Reg R10) ]
       @ [ IJe (Label done_label) ] (* if arg1 is false -> false*)
@@ -196,13 +209,13 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ [ ILabel (Label done_label) ]
     | Or -> 
       let done_label = Gensym.fresh "or" in
-      const1
+      instr1
       @ test_if_bool 
       @ [ IMov (Reg R10, Const bool_true) ]
       @ [ ICmp (Reg RAX, Reg R10) ]
       @ [ IJe (Label done_label) ]
       @ [ IMov (Reg R10, Reg RAX) ]
-      @ [ IMov (Reg RAX, arg_immexpr imm2 l_env e_env) ]
+      @ instr2
       @ test_if_bool
       @ [ ICmp (Reg RAX, Reg R10) ]
       @ [ IJe (Label done_label) ]
@@ -211,13 +224,13 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
     | Lte -> 
       let lte_label = Gensym.fresh "lte" in
       let done_label = Gensym.fresh "ltedone" in
-      const1
+      instr1
       @ test_if_number
       @ [ IMov (Reg R10, Reg RAX) ]
-      @ const2
+      @ instr2
       @ test_if_number
       @ [ IMov (Reg RAX, Reg R10) ]
-      @ [ IMov (Reg R10, arg_immexpr imm2 l_env e_env)]
+      @ compile_immexpr imm2 ~dst:R10 l_env e_env
       @ [ ICmp (Reg RAX, Reg R10) ]
       @ [ IJle (Label lte_label) ]
       @ [ IMov (Reg RAX, Const bool_false) ]
@@ -226,13 +239,13 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       @ [ IMov (Reg RAX, Const bool_true) ]
       @ [ ILabel (Label done_label) ]
     | Get ->
-      const2 (* index *)
+      instr2 (* index *)
       @ test_if_number
       @ untag_type CInt
       @ [ IMov (Reg R10, Reg RAX) ]
-      @ const1 (* tuple *)
+      @ instr1 (* tuple *)
       @ test_if_tuple
-      @ const1
+      @ instr1
       @ untag_type (CTuple [])
       @ [ IMov (Reg R11, RegOffset(RAX, 0)) ] (* get tuple size and check bounds*)
       @ [ ICmp (Reg R10, Reg R11)]
@@ -285,7 +298,7 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
       | [] -> []
       | hd::tl ->
         [ IComment ("store elem in slot " ^ (Int.to_string n))]
-        @ [ IMov (Reg RAX, arg_immexpr hd l_env e_env) ]
+        @ compile_immexpr hd l_env e_env
         @ [ IMovSize ("qword", RegOffset (R15, n), Reg RAX) ]
         @ move_elems tl (n+1)
     in
@@ -296,13 +309,13 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
     @ tag_type (CTuple [])
     @ [ IAdd (Reg R15, Const(Int64.of_int (8 * (n+1)))) ] (* bump heap pointer *)
   | Set (t, k, v) ->
-    [ IMov (Reg RAX, arg_immexpr k l_env e_env) ] (* index *)
+    compile_immexpr k l_env e_env (* index *)
     @ test_if_number
     @ untag_type CInt
     @ [ IMov (Reg R10, Reg RAX) ]
-    @ [ IMov (Reg RAX, arg_immexpr t l_env e_env) ] (* tuple *)
+    @ compile_immexpr t l_env e_env (* tuple *)
     @ test_if_tuple
-    @ [ IMov (Reg RAX, arg_immexpr t l_env e_env) ] (* restore tuple *)
+    @ compile_immexpr t l_env e_env (* restore tuple *)
     @ untag_type (CTuple [])
     @ [ IMov (Reg R11, RegOffset(RAX, 0)) ] (* get tuple size on R11 and check bounds*)
     @ [ ICmp (Reg R10, Reg R11)]
@@ -310,7 +323,7 @@ and compile_cexpr (expr : cexpr) (l_env : env) (e_env : env) (fenv : afenv) : in
     @ [ ICmp (Reg R10, Const 0L) ]
     @ [ IJl  (Label "error_index") ]
     @ [ IAdd (Reg R10, Const 1L) ] (* finally set the value at idx+1 to skip over the size slot *)
-    @ [ IMov (Reg R11, arg_immexpr v l_env e_env) ]
+    @ compile_immexpr v ~dst:R11 l_env e_env
     @ [ IMovSize ("qword", RegIndex (RAX, R10), Reg R11)] (* set the value *)
     @ tag_type (CTuple []) (* return the same tuple pointer *)
 
@@ -320,13 +333,17 @@ and build_args args l_env e_env =
     | [] -> instrs
     | hd::tl ->
       begin match List.length instrs with
-      | 0 -> inner_rec tl ([ IMov (Reg RDI, arg_immexpr hd l_env e_env) ] @ instrs)
-      | 1 -> inner_rec tl ([ IMov (Reg RSI, arg_immexpr hd l_env e_env) ] @ instrs)
-      | 2 -> inner_rec tl ([ IMov (Reg RDX, arg_immexpr hd l_env e_env) ] @ instrs)
-      | 3 -> inner_rec tl ([ IMov (Reg RCX, arg_immexpr hd l_env e_env) ] @ instrs)
-      | 4 -> inner_rec tl ([ IMov (Reg R8, arg_immexpr hd l_env e_env) ] @ instrs)
-      | 5 -> inner_rec tl ([ IMov (Reg R9, arg_immexpr hd l_env e_env) ] @ instrs)
-      | n when n > 5 -> inner_rec tl ([ IPush (arg_immexpr hd l_env e_env) ] @ instrs)
+      | 0 -> inner_rec tl (compile_immexpr hd ~dst:RDI l_env e_env @ instrs)
+      | 1 -> inner_rec tl (compile_immexpr hd ~dst:RSI l_env e_env @ instrs)
+      | 2 -> inner_rec tl (compile_immexpr hd ~dst:RDX l_env e_env @ instrs)
+      | 3 -> inner_rec tl (compile_immexpr hd ~dst:RCX l_env e_env @ instrs)
+      | 4 -> inner_rec tl (compile_immexpr hd ~dst:R8 l_env e_env @ instrs)
+      | 5 -> inner_rec tl (compile_immexpr hd ~dst:R9 l_env e_env @ instrs)
+      | n when n > 5 -> 
+        begin match compile_immexpr hd l_env e_env with
+        | [IMov (_, x)] -> inner_rec tl ([ IPush x ] @ instrs)
+        | _ -> failwith "Unexpected behaviour"
+        end
       | _ -> failwith "Negative list length"
       end
   in inner_rec args []
@@ -339,7 +356,7 @@ and build_test_args expected_types args l_env e_env =
     | hd::tl ->
       let expected_type = List.hd expected_types
       in let move_test_untag =
-        [ IMov (Reg RAX, arg_immexpr hd l_env e_env)]
+        compile_immexpr hd l_env e_env
         @ test_type expected_type
         @ untag_type expected_type
       in begin match acount with
@@ -354,18 +371,32 @@ and build_test_args expected_types args l_env e_env =
       end
   in inner_rec expected_types args [] 0
 
-and arg_immexpr (expr : immexpr) (l_env : env) (e_env : env) : arg =
+and compile_immexpr (expr : immexpr) ?(dst : reg = RAX) (l_env : env) (e_env : env) =
   match expr with
-  | Num n -> 
-    if n > max_int || n < min_int 
-      then raise (CTError (Printf.sprintf "Integer overflow: " ^ (Int64.to_string n)))
-      else Const (Int64.shift_left n 1)
-  | Bool true -> Const (bool_true)
-  | Bool false -> Const (bool_false)
+  | Num n ->
+    if n > max_int || n < min_int
+      then raise (CTError (sprintf "Integer overflow: " ^ (Int64.to_string n)))
+      else [ IMov (Reg dst, Const (Int64.shift_left n 1))]
+  | Bool true -> [ IMov (Reg dst, Const bool_true) ]
+  | Bool false -> [ IMov (Reg dst, Const bool_false) ]
   | Id x -> 
     let reg, n = lookup_env x l_env e_env in
-    if n = 0 then Reg reg else RegOffset (reg, n)
-  | Lambda (_(*params*), _(* expr *)) -> failwith "TBD"
+    if n = 0
+      then [ IMov (Reg dst, Reg reg) ] 
+      else [ IMov (Reg dst, RegOffset (reg, n)) ]
+  | Lambda (args, lambda_expr) -> 
+    let lambda_label = Gensym.fresh "lambda_fun" in
+    let arity = Int64.of_int (List.length args) in
+    [ IJmp (Label (lambda_label^"_end")) ]
+    @ [ ILabel (Label lambda_label) ]
+    (* ... *)
+    @ [ ILabel (Label (lambda_label^"_end")) ]
+    @ [ IMov (RegOffset (R15, 0), Const arity) ]
+    @ [ IMov (RegOffset (R15, 16), Label lambda_label) ]
+    (* ... *)
+    @ [ IMov (Reg RAX, Reg R15) ]
+    @ [ IAdd (Reg RAX, Const closure_tag) ]
+    (* ... *)
 
 let compile_afundefs (fenv: afundef list) : instruction list =
   let rec gen_64bits_env l env =

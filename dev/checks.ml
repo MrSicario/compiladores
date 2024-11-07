@@ -25,7 +25,6 @@ and check_cexpr e afenv =
   | Atom _ -> true
   | Prim1 (_, cexpr) -> check_cexpr cexpr afenv
   | Prim2 (_, _, _) -> true
-  (* TBD: Move arity checks to runtime *)
   | Apply (f, args) ->
     begin match lookup_afenv f afenv with
     | DefFun (_, vars, _) ->
