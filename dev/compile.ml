@@ -140,6 +140,9 @@ let error_handlers =
   let error_arity_mismatch =
     [ ILabel (Label "error_wrong_arity") ]
     @ [ IMov (Reg RDI, Const 5L) ]
+    @ [ IMov (Reg R10, Qword (RegOffset (RAX, 0))) ]
+    @ [ ISal (Reg R10, Const 1L) ]
+    @ [ ISal (Reg R11, Const 1L) ]
     @ [ IMov (Reg RSI, Reg R10) ]
     @ [ IMov (Reg RDX, Reg R11) ]
     @ [ ICall (Label "error") ]
@@ -361,7 +364,8 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
     @ test_if_closure
     @ [ IMov (Reg R10, Reg RAX) ]
     @ [ ISub (Reg RAX, Const closure_tag) ]
-    @ [ ICmp (Qword (RegOffset (RAX, 0)), Const (Int64.of_int args_len))]
+    @ [ IMov (Reg R11, Const (Int64.of_int args_len)) ]
+    @ [ ICmp (Qword (RegOffset (RAX, 0)), Reg R11)]
     @ [ IJne (Label "error_wrong_arity") ]
     @ caller_saved_push
     @ arg_instrs
@@ -405,7 +409,7 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ ISub (Reg R11, Const closure_tag) ]
     @ List.fold_right (fun id instrs -> 
       let reg, slot = lookup_env id lambda_env in
-      [ IMov (Reg RAX, RegOffset(R11, (List.length instrs)+3)) ]
+      [ IMov (Reg RAX, Qword (RegOffset(R11, (List.length instrs)+3))) ]
       @ [ IMov (RegOffset(reg, slot), Reg RAX) ]
     ) free_vars []
     @ [ ISub (Reg RSP, Const (Int64.mul depth 8L)) ]

@@ -1,0 +1,10 @@
+NAME: lambda with inner lambda
+DESCRIPTION: test lambda closure creation
+SRC:
+(let (y 3) 
+    (let (foo (lambda (x) (+ (@ (lambda (x) (+ y x)) y) x)))
+        (+ (@ foo 2) 2)
+    )
+)
+EXPECTED:
+|ORACLE
