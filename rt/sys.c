@@ -3,6 +3,8 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
+#define _GNU_SOURCE
+
 typedef uint64_t u64;
 typedef int64_t i64;
 const u64 BOOL_TAG = 0x0000000000000001;
@@ -17,7 +19,8 @@ typedef enum {
   NOT_NUMBER = 1,
   NOT_BOOLEAN = 2,
   NOT_TUPLE = 3,
-  ARITY = 4,
+  NOT_CLOSURE = 4,
+  ARITY = 5,
   INDEX = 10,
   RUNTIME = 100
 } ErrCode;
@@ -61,8 +64,12 @@ void error(ErrCode err, u64 val, u64 extra) {
     case NOT_TUPLE:
       fprintf(stderr, "Type error: Expected tuple but got %s", vs);
       break;
+    case NOT_CLOSURE:
+      fprintf(stderr, "Type error: Expected closure but got %s", vs);
+      break;
     case ARITY:
       fprintf(stderr, "Arity mismatch: closure expected %s arguments but got %s", vs, xs);
+      break;
     case INDEX:
       fprintf(stderr, "Index out of bounds: Tried to access index %s of %s", xs, vs);
       break;

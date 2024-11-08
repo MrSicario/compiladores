@@ -17,7 +17,7 @@ and cexpr =
   | Tuple of immexpr list
   | Set of immexpr * immexpr * immexpr
   | LamApply of immexpr * immexpr list
-  
+
 and immexpr =
   | Num of int64
   | Bool of bool
@@ -203,10 +203,45 @@ let get_depth aexpr =
     | If (_, t_branch, f_branch) -> max (count t_branch acc) (count f_branch acc)
   in count aexpr 0
 
+let get_free_vars aexpr env =
+  let rec acc_aexpr aexpr env free =
+    match aexpr with
+    | Let (id, bound_expr, body_expr) -> 
+      let env' = id::env in
+      let free' = acc_cexpr bound_expr env free in
+      acc_aexpr body_expr env' free'
+    | If (cond_expr, then_expr, else_expr) ->
+      let free' = acc_immexpr cond_expr env free in
+      let free'' = acc_aexpr then_expr env free' in
+      acc_aexpr else_expr env free''
+    | Ret cexpr -> free @ acc_cexpr cexpr env free
+  and acc_cexpr cexpr env free =
+    match cexpr with
+    | Atom imm -> acc_immexpr imm env free
+    | Prim1 (_, cexpr) -> acc_cexpr cexpr env free
+    | Prim2 (_, imm1, imm2) ->
+      let free' = acc_immexpr imm1 env free in
+      acc_immexpr imm2 env free'
+    | Apply (_, imms) -> List.fold_right (fun imm free -> acc_immexpr imm env free) imms free
+    | Tuple imms -> List.fold_right (fun imm free -> acc_immexpr imm env free) imms free
+    | Set (imm1, imm2, imm3) ->
+      let free' = acc_immexpr imm1 env free in
+      let free'' = acc_immexpr imm2 env free' in
+      acc_immexpr imm3 env free''
+    | LamApply (lambda, imms) ->
+      let free' = acc_immexpr lambda env free in
+      List.fold_right (fun imm free -> acc_immexpr imm env free) imms free'
+  and acc_immexpr immexpr env free =
+    match immexpr with
+    | Id id -> if List.mem id env then free else id::free
+    | Lambda (params, body_expr) -> acc_aexpr body_expr (params @ env) free
+    | _ -> free
+  in acc_aexpr aexpr env []
+
 let rec string_of_aexpr (a : aexpr) : string =
   match a with
-  | Let (id, c, a) -> 
-    sprintf "(let (%s %s) %s)" 
+  | Let (id, c, a) ->
+    sprintf "(let (%s %s) %s)"
     id (string_of_cexpr c) (string_of_aexpr a)
   | Ret c -> sprintf "%s" (string_of_cexpr c)
   | If (icond, athen, aelse) -> sprintf "(if %s %s %s)" 
