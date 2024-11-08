@@ -23,6 +23,7 @@ type arg =
 | RegOffset of reg * int
 | RegIndex of reg * reg
 | Label of string
+| Qword of arg
 | Rel of arg
 
 (* asm instructions *)
@@ -31,7 +32,6 @@ type instruction =
 | IComment of string
 | IRet
 | IMov of arg * arg
-| IMovSize of string * arg * arg
 | IAdd of arg * arg
 | ISub of arg * arg
 | ICmp of arg * arg
@@ -85,6 +85,7 @@ let rec pp_arg arg : string =
   | RegIndex (r, i) -> sprintf "[%s + %s * 8]" (pp_reg r) (pp_reg i)
   | Label l -> l
   | Rel arg -> sprintf "[rel %s]" (pp_arg arg)
+  | Qword arg -> sprintf "qword %s" (pp_arg arg)
 
 let pp_instr instr : string =
   match instr with
@@ -92,7 +93,6 @@ let pp_instr instr : string =
   | IComment s -> sprintf "; %s" s
   | IRet -> "  ret" 
   | IMov (a1, a2) -> sprintf "  mov %s, %s" (pp_arg a1) (pp_arg a2)
-  | IMovSize (a1, a2, a3) -> sprintf "  mov %s %s, %s" a1 (pp_arg a2) (pp_arg a3)
   | IAdd (a1, a2) -> sprintf "  add %s, %s" (pp_arg a1) (pp_arg a2)
   | ISub (a1, a2) -> sprintf "  sub %s, %s" (pp_arg a1) (pp_arg a2)
   | ICmp (a1, a2) -> sprintf "  cmp %s, %s" (pp_arg a1) (pp_arg a2)

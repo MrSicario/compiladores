@@ -1,0 +1,7 @@
+NAME: lambda arity error
+DESCRIPTION: test lambda RT arity error
+SRC:
+(let (y 3) 
+    (let (foo (lambda (x z) (+ x z))) (@ foo 2)))
+EXPECTED:
+|ORACLE

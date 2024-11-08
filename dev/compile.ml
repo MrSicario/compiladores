@@ -312,11 +312,11 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
       | hd::tl ->
         [ IComment ("store elem in slot " ^ (Int.to_string n))]
         @ compile_immexpr hd env fenv
-        @ [ IMovSize ("qword", RegOffset (R15, n), Reg RAX) ]
+        @ [ IMov (Qword (RegOffset (R15, n)), Reg RAX) ]
         @ move_elems tl (n+1)
     in
     [ IComment "store the size of the tuple in slot 0"]
-    @ [ IMovSize ("qword", RegOffset (R15, 0), Const (Int64.of_int n)) ]
+    @ [ IMov (Qword (RegOffset (R15, 0)), Const (Int64.of_int n)) ]
     @ move_elems imm_list 1
     @ [ IMov (Reg RAX, Reg R15) ]
     @ tag_type (CTuple [])
@@ -337,7 +337,7 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
     @ [ IJl  (Label "error_index") ]
     @ [ IAdd (Reg R10, Const 1L) ] (* finally set the value at idx+1 to skip over the size slot *)
     @ compile_immexpr v ~dst:R11 env fenv
-    @ [ IMovSize ("qword", RegIndex (RAX, R10), Reg R11) ] (* set the value *)
+    @ [ IMov (Qword (RegIndex (RAX, R10)), Reg R11) ] (* set the value *)
     @ tag_type (CTuple []) (* return the same tuple pointer *)
   | LamApply (lambda_expr, args) ->
     let caller_saved_push =
@@ -355,14 +355,14 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
       @ [ IPop (Reg R8) ]
       @ [ IPop (Reg R9) ]
     in let lambda = compile_immexpr lambda_expr env fenv in
-    let arg_instrs = build_args args ~self:(R10, 0) env fenv in
+    let arg_instrs = build_args args ~self:R10 env fenv in
     let args_len = List.length args in
     lambda
     @ test_if_closure
     @ [ IMov (Reg R10, Reg RAX) ]
     @ [ ISub (Reg RAX, Const closure_tag) ]
-    (* @ [ ICmp (RegOffset (RAX, 0), Const (Int64.of_int args_len))]
-    @ [ IJne (Label "error_wrong_arity") ] *)
+    @ [ ICmp (Qword (RegOffset (RAX, 0)), Const (Int64.of_int args_len))]
+    @ [ IJne (Label "error_wrong_arity") ]
     @ caller_saved_push
     @ arg_instrs
     @ [ ICall (RegOffset (RAX, 1)) ]
@@ -400,7 +400,7 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ ILabel (Label lambda_label) ]
     @ [ IPush (Reg RBP) ]
     @ [ IMov (Reg RBP, Reg RSP) ]
-    @ [ ISub (Reg RBP, Const (Int64.mul n_free_vars 8L)) ]
+    @ [ ISub (Reg RSP, Const (Int64.mul n_free_vars 8L)) ]
     @ [ IMov (Reg R11, Reg RDI) ]
     @ [ ISub (Reg R11, Const closure_tag) ]
     @ List.fold_right (fun id instrs -> 
@@ -408,27 +408,27 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
       [ IMov (Reg RAX, RegOffset(R11, (List.length instrs)+3)) ]
       @ [ IMov (RegOffset(reg, slot), Reg RAX) ]
     ) free_vars []
-    @ [ ISub (Reg RBP, Const (Int64.mul depth 8L)) ]
+    @ [ ISub (Reg RSP, Const (Int64.mul depth 8L)) ]
     @ compile_aexpr lambda_expr lambda_env fenv
     @ [ IMov (Reg RSP, Reg RBP) ]
     @ [ IPop (Reg RBP) ]
     @ [ IRet ]
     @ [ ILabel (Label (lambda_label^"_end")) ]
     (* Closure *)
-    @ [ IMovSize ("qword", RegOffset (R15, 0), Const arity) ]
+    @ [ IMov (Qword (RegOffset (R15, 0)), Const arity) ]
     @ [ ILea (Reg R11, Rel (Label lambda_label)) ]
-    @ [ IMovSize ("qword", RegOffset (R15, 1), Reg R11) ]
-    @ [ IMovSize ("qword", RegOffset (R15, 2), Const n_free_vars) ]
+    @ [ IMov (Qword (RegOffset (R15, 1)), Reg R11) ]
+    @ [ IMov (Qword (RegOffset (R15, 2)), Const n_free_vars) ]
     @ List.fold_right (fun id instrs -> 
       let reg, slot = lookup_env id env in
       [ IMov (Reg R10, RegOffset(reg, slot)) ]
-      @ [ IMovSize ("qword", RegOffset(R15, (List.length instrs)+3), Reg R10) ]
+      @ [ IMov (Qword (RegOffset(R15, (List.length instrs)+3)), Reg R10) ]
     ) free_vars []
     @ [ IMov (Reg dst, Reg R15) ]
     @ [ IAdd (Reg dst, Const closure_tag) ]
     @ [ IAdd (Reg R15, Const (Int64.mul (Int64.add n_free_vars 3L) 8L)) ]
 
-and build_args args ?(self:(reg*int) option) env fenv =
+and build_args args ?(self:reg option) env fenv =
   let rec inner_rec args instrs =
     match args with
     | [] -> instrs
@@ -449,7 +449,7 @@ and build_args args ?(self:(reg*int) option) env fenv =
       end
   in match self with
   | None -> inner_rec args []
-  | Some (r, i) -> inner_rec args [IMov (Reg RDI, RegOffset(r, i))]
+  | Some r -> inner_rec args [IMov (Reg RDI, Reg r)]
 
 (* Like build_args, but type checks each argument first *)
 and build_test_args expected_types args env fenv =
