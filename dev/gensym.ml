@@ -9,7 +9,7 @@ module Gensym = struct
   let fresh s =
     let id = !counter in
     counter := id + 1;
-    sprintf "$%s%d" s id
+    sprintf "%s%d" s id
 end
 
 (* Lexical Environment *)

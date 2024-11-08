@@ -32,15 +32,28 @@ let rec parse_exp (sexp : sexp) : expr =
     | `Atom "let" -> (
       match e1 with
       | `List [`Atom id; e] -> Let (id, parse_exp e, parse_exp e2)
-      | `List [`List(`Atom "tup" :: exprs); `Atom t] -> (
-        let rec acc_let (ids : t list) n =
-          match ids with
-          | [] -> parse_exp e2
-          | hd::tl -> (
-            match hd with
-            | `Atom id -> Let (id, Prim2(Get, Id t, Num (Int64.of_int n)), (acc_let tl (n+1)))
-            | _ -> raise (CTError (sprintf "Not a valid let assignment: %s" (to_string hd))))
-        in acc_let exprs 0
+      | `List [`List(`Atom "tup" :: exprs); e] -> (
+        begin match parse_exp e with
+        | Tuple(lst) ->
+          (let rec acc_let (ids : t list) n =
+            match ids with
+            | [] -> parse_exp e2
+            | hd::tl -> (
+              match hd with
+              | `Atom id -> Let (id, Prim2(Get, Id "t", Num (Int64.of_int n)), (acc_let tl (n+1)))
+              | _ -> raise (CTError (sprintf "Not a valid let assignment: %s" (to_string hd))))
+          in Let ("t", Tuple(lst), acc_let exprs 0))
+        | Id t ->
+          (let rec acc_let (ids : t list) n =
+            match ids with
+            | [] -> parse_exp e2
+            | hd::tl -> (
+              match hd with
+              | `Atom id -> Let (id, Prim2(Get, Id t, Num (Int64.of_int n)), (acc_let tl (n+1)))
+              | _ -> raise (CTError (sprintf "Not a valid let assignment: %s" (to_string hd))))
+          in acc_let exprs 0)
+        | _ -> raise (CTError (sprintf "Not a valid let assignment: %s" (to_string e)))
+        end
       )
       | _ -> raise (CTError (sprintf "Not a valid let assignment: %s" (to_string e1))) )
     | `Atom "letrec" -> (

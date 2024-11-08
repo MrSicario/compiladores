@@ -23,6 +23,7 @@ type arg =
 | RegOffset of reg * int
 | RegIndex of reg * reg
 | Label of string
+| Rel of arg
 
 (* asm instructions *)
 type instruction =
@@ -53,6 +54,7 @@ type instruction =
 | ICall of arg
 | IPush of arg
 | IPop of arg
+| ILea of arg * arg
 
 (* TO BE COMPLETED *)
 
@@ -72,7 +74,7 @@ let pp_reg reg : string =
   | R14 -> "R14"
   | R15 -> "R15"
 
-let pp_arg arg : string =
+let rec pp_arg arg : string =
   match arg with
   | Const n -> sprintf "%#Lx" n
   | Reg r -> pp_reg r
@@ -82,6 +84,7 @@ let pp_arg arg : string =
       else sprintf "[%s + 8*%i]" (pp_reg r) (i)
   | RegIndex (r, i) -> sprintf "[%s + %s * 8]" (pp_reg r) (pp_reg i)
   | Label l -> l
+  | Rel arg -> sprintf "[rel %s]" (pp_arg arg)
 
 let pp_instr instr : string =
   match instr with
@@ -112,6 +115,7 @@ let pp_instr instr : string =
   | ICall a1 -> sprintf "  call %s" (pp_arg a1)
   | IPush a1 -> sprintf "  push %s" (pp_arg a1)
   | IPop a1 -> sprintf "  pop %s" (pp_arg a1)
+  | ILea (a1, a2) -> sprintf "  lea %s, %s" (pp_arg a1) (pp_arg a2)
   (* TO BE COMPLETED *)
 
 let pp_instrs (instrs : instruction list) : string =

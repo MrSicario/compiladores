@@ -1,0 +1,9 @@
+NAME: Tuple pattern matching directly with a tuple
+DESCRIPTION: Pattern match a tuple trough syntactic sugar
+SRC:
+(
+    (let ((tup x y z) (tup 1 2 3))
+        (+ (+ x y) z))
+)
+EXPECTED:
+6

@@ -416,7 +416,8 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ ILabel (Label (lambda_label^"_end")) ]
     (* Closure *)
     @ [ IMovSize ("qword", RegOffset (R15, 0), Const arity) ]
-    @ [ IMovSize ("qword", RegOffset (R15, 1), Label lambda_label) ]
+    @ [ ILea (Reg R11, Rel (Label lambda_label)) ]
+    @ [ IMovSize ("qword", RegOffset (R15, 1), Reg R11) ]
     @ [ IMovSize ("qword", RegOffset (R15, 2), Const n_free_vars) ]
     @ List.fold_right (fun id instrs -> 
       let reg, slot = lookup_env id env in

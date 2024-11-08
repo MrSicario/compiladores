@@ -1,4 +1,4 @@
-NAME: Tuple pattern matching
+NAME: Tuple pattern matching with an identifier
 DESCRIPTION: Pattern match a tuple trough syntactic sugar
 SRC:
 (
