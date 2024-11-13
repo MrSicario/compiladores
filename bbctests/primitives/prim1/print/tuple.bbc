@@ -1,0 +1,7 @@
+NAME: FFI Print tuple
+DESCRIPTION: external print function with tuple value
+SRC:
+(print (tup 5 8 5 2))
+EXPECTED:
+> (tup 5 8 5 2)
+|ORACLE

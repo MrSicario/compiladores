@@ -7,46 +7,59 @@
 
 typedef uint64_t u64;
 typedef int64_t i64;
-const u64 BOOL_TAG = 0x0000000000000001;
 const u64 BOOL_TRUE = 0x8000000000000001;
 const u64 BOOL_FALSE = 0x0000000000000001;
-const u64 POINTER_MASK = 0b111;
+// Tags
+const u64 INT_TAG = 0b000;
+const u64 BOOL_TAG = 0b001;
 const u64 TUPLE_TAG = 0b011;
-
-// printf("%" PRId64 "\n", result);
+const u64 CLOSURE_TAG = 0b101;
+const u64 POINTER_MASK = 0b111;
 
 typedef enum {
   NOT_NUMBER = 1,
   NOT_BOOLEAN = 2,
   NOT_TUPLE = 3,
   NOT_CLOSURE = 4,
-  ARITY = 5,
-  INDEX = 10,
-  RUNTIME = 100
+  WRONG_ARITY = 5,
+  INDEX_ERROR = 10,
+  RT_ERROR = 100
 } ErrCode;
 
 extern u64 our_code_starts_here(u64 *heap) asm("our_code_starts_here");
 
 char *val_to_string(u64 val) {
   char *s = NULL;
-  if (val == BOOL_TRUE) {
-    asprintf(&s, "true");
-  } else if (val == BOOL_FALSE) {
-    asprintf(&s, "false");
-  } else if ((val & POINTER_MASK) == TUPLE_TAG) {
-    asprintf(&s, "(tup");
-    u64 *tup = (u64 *)(val - TUPLE_TAG);
-    u64 tup_size = tup[0];
-    for (u64 i=0; i<tup_size; i++) {
-      char *elem = val_to_string(tup[i+1]);
-      asprintf(&s, "%s %s", s, elem);
-      free(elem);
-    }
-    asprintf(&s, "%s)", s);
-  } else if ((val & (BOOL_TAG)) == 0) {
-    asprintf(&s, "%" PRId64, (i64)val >> 1);
-  } else {
-    fprintf(stderr, "Runtime error: Invalid value 0x%" PRId64 "\n", val);
+  u64 tag = val & POINTER_MASK;
+  switch (tag) {
+    case INT_TAG:
+      asprintf(&s, "%" PRId64, (i64)val >> 1);
+      break;
+    case BOOL_TAG:
+      if (val == BOOL_TRUE) asprintf(&s, "true");
+      else asprintf(&s, "false");
+      break;
+    case TUPLE_TAG:
+      asprintf(&s, "(tup");
+      u64 *tup = (u64 *)(val - TUPLE_TAG);
+      u64 tup_size = tup[0];
+      for (u64 i=0; i<tup_size; i++) {
+        char *elem = val_to_string(tup[i+1]);
+        asprintf(&s, "%s %s", s, elem);
+        free(elem);
+      }
+      asprintf(&s, "%s)", s);
+      break;
+    case CLOSURE_TAG:
+      asprintf(&s, "<clos:");
+      u64 *clos = (u64 *)(val - CLOSURE_TAG);
+      u64 arity = clos[0];
+      asprintf(&s, "%s%" PRId64, s, (i64)arity);
+      asprintf(&s, "%s>", s);
+      break;
+    default:
+      fprintf(stderr, "Runtime error: Invalid value 0x%" PRId64 "\n", val);
+      break;
   }
   return s;
 }
@@ -67,13 +80,13 @@ void error(ErrCode err, u64 val, u64 extra) {
     case NOT_CLOSURE:
       fprintf(stderr, "Type error: Expected closure but got %s", vs);
       break;
-    case ARITY:
+    case WRONG_ARITY:
       fprintf(stderr, "Arity mismatch: closure expected %s arguments but got %s", vs, xs);
       break;
-    case INDEX:
+    case INDEX_ERROR:
       fprintf(stderr, "Index out of bounds: Tried to access index %s of %s", xs, vs);
       break;
-    case RUNTIME:
+    case RT_ERROR:
       fprintf(stderr, "Runtime error: Invalid value 0x%" PRId64 "\n", val);
   }
   free(vs);

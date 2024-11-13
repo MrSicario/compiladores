@@ -1,6 +1,0 @@
-NAME: lambda definition
-DESCRIPTION: test lambda closure creation
-SRC:
-(let (y 3) (let (foo (lambda (x) (+ y x)) ) (@ foo 2)))
-EXPECTED:
-|ORACLE

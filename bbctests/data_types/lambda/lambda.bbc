@@ -1,0 +1,9 @@
+NAME: lambda definition
+DESCRIPTION: test lambda closure creation
+SRC:
+(let (y 3) (let (foo (lambda (x) (+ y (print x))) ) (@ (print foo) (print 2))))
+EXPECTED:
+> 2
+> <clos:1>
+> 2
+5

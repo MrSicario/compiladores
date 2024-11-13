@@ -1,0 +1,7 @@
+NAME: FFI Print tuple
+DESCRIPTION: external print function with tuple value
+SRC:
+(print (lambda (x) (+ x x)))
+EXPECTED:
+> <clos:1>
+<clos:1>
