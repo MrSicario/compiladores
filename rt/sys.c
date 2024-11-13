@@ -10,7 +10,6 @@ typedef int64_t i64;
 const u64 BOOL_TRUE = 0x8000000000000001;
 const u64 BOOL_FALSE = 0x0000000000000001;
 // Tags
-const u64 INT_TAG = 0b000;
 const u64 BOOL_TAG = 0b001;
 const u64 TUPLE_TAG = 0b011;
 const u64 CLOSURE_TAG = 0b101;
@@ -32,9 +31,6 @@ char *val_to_string(u64 val) {
   char *s = NULL;
   u64 tag = val & POINTER_MASK;
   switch (tag) {
-    case INT_TAG:
-      asprintf(&s, "%" PRId64, (i64)val >> 1);
-      break;
     case BOOL_TAG:
       if (val == BOOL_TRUE) asprintf(&s, "true");
       else asprintf(&s, "false");
@@ -58,7 +54,7 @@ char *val_to_string(u64 val) {
       asprintf(&s, "%s>", s);
       break;
     default:
-      fprintf(stderr, "Runtime error: Invalid value 0x%" PRId64 "\n", val);
+      asprintf(&s, "%" PRId64, (i64)val >> 1);
       break;
   }
   return s;

@@ -4,4 +4,4 @@ SRC:
 (print (tup 5 8 5 2))
 EXPECTED:
 > (tup 5 8 5 2)
-|ORACLE
+(tup 5 8 5 2)
