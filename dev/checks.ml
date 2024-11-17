@@ -16,6 +16,8 @@ let rec check_aexpr e afenv =
   match e with
   | Let (_, bound_expr, body_expr) ->
     check_cexpr bound_expr afenv && check_aexpr body_expr afenv
+  | LetRec (_, body_expr) ->
+    check_aexpr body_expr afenv
   | If (_, then_expr, else_expr) ->
     check_aexpr then_expr afenv && check_aexpr else_expr afenv
   | Ret (cexpr) -> check_cexpr cexpr afenv

@@ -32,6 +32,15 @@ let extend_env (name : string) (reg : reg) ?(fun_param:int = 0) (env : env) : (e
     ((Env (rbp, slot, (name, (R15, -slot))::lst)), -slot)
   | _ -> ((Env (rbp, r15, (name, (reg, 0))::lst)), 0)
 
+let multiextend_env (ids : string list) (env : env) : (env * int list) =
+  let rec inner = fun ids ienv (il: int list) ->
+    match ids with
+    | hd::tl ->
+      let env', s = extend_env hd RBP ienv
+      in inner tl env' (il @ [s])
+    | [] -> (ienv, il)
+  in inner ids env []
+
 let lookup_env (name : string) (env : env) : reg * int =
   let Env(_, _, lst) = env in
   if List.mem_assoc name lst then List.assoc name lst
@@ -156,6 +165,23 @@ let rec compile_aexpr (expr : aexpr) (env : env) (fenv : afenv) : instruction li
     (compile_cexpr c env fenv)
     @ [ IMov (RegOffset (RBP, slot), Reg (RAX)) ]
     @ (compile_aexpr a env' fenv)
+  | LetRec (bind_list, body_expr) ->
+    let ids, lambdas = List.split bind_list in
+    let env', slot_list = multiextend_env ids env in
+    let precomp = fun lambexp slot ->
+      let n_free_vars = Int64.of_int (List.length (lambda_get_freevars lambexp)) in
+      [ IMov (Reg RAX, Reg R11) ] (* we store the lambda values before compiling them *)
+      @ [ IAdd (Reg RAX, Const closure_tag) ]
+      @ [ IMov (RegOffset (RBP, slot), Reg RAX) ]
+      @ [ IAdd (Reg R11, Const (Int64.mul (Int64.add n_free_vars 3L) 8L))] in
+    let comp = fun exp slot ->
+      compile_immexpr exp env' fenv
+      @ [ IMov (RegOffset (RBP, slot), Reg RAX)]
+    in
+    [ IMov (Reg R11, Reg R15) ]
+    @ List.fold_right (@) (List.map2 precomp lambdas slot_list) []
+    @ List.fold_right (@) (List.map2 comp lambdas slot_list) []
+    @ (compile_aexpr body_expr env' fenv)
   | If (cond_expr, then_expr, else_expr) ->
     let else_label = Gensym.fresh "else" in
     let done_label = Gensym.fresh "done" in

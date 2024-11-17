@@ -31,6 +31,15 @@ let gen_env l name =
       in gen_env l Env.empty []
     | Error x -> raise (CTError (sprintf "Identifier already declared in namespace: %s" x))
 
+let rec binds_extend_ids binds env =
+  match binds with
+  | hd::tl ->
+    let id, _, _ = hd in
+    let id' = Gensym.fresh id in
+    binds_extend_ids tl (Env.add id id' env)
+  | [] -> env
+
+
 let extend_env l env =
   let rec find_duplicate ls = 
     match ls with
@@ -80,4 +89,16 @@ let rec  alpha_rename_expr expr env =
     let arename_env = fun x -> alpha_rename_expr x env in
     Tuple (List.map arename_env expr_list)
   | Set (e, k, v) -> Set (alpha_rename_expr e env, alpha_rename_expr k env, alpha_rename_expr v env)
-  | LetRec (_, _) -> failwith "TBD"
+  | LetRec (bind_list, body) ->
+    let letrec_env = binds_extend_ids bind_list env in
+    let bind_list' = binds_rename_lambdas bind_list letrec_env [] in
+    LetRec (bind_list', alpha_rename_expr body letrec_env)
+
+and binds_rename_lambdas binds env accum =
+  match binds with
+  | hd::tl ->
+    let id, params, body = hd in
+    let params', lambda_env = extend_env params env in
+    let body' = alpha_rename_expr body lambda_env in
+    binds_rename_lambdas tl env (accum @ [(Env.find id env, params', body')])
+  | [] -> accum
