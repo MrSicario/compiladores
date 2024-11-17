@@ -1,0 +1,7 @@
+NAME: let lambda recursive
+DESCRIPTION: a lambda binding that uses let instead of letrec, causing an error
+STATUS: CT error
+SRC:
+(let (sum (lambda (x) (if (<= x 1) 1 (+ x (sum (- x 1)))))) (sum 7))
+EXPECTED:
+.*\(U\|u\)ndefined function.*
