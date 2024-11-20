@@ -1,9 +1,9 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdlib.h>
-
-#define _GNU_SOURCE
 
 typedef uint64_t u64;
 typedef int64_t i64;
