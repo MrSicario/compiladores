@@ -433,9 +433,10 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ ISub (Reg RSP, Const (Int64.mul n_free_vars 8L)) ]
     @ [ IMov (Reg R11, Reg RDI) ]
     @ [ ISub (Reg R11, Const closure_tag) ]
-    @ List.fold_right (fun id instrs -> 
+    @ List.fold_right (fun id acc -> 
       let reg, slot = lookup_env id lambda_env in
-      [ IMov (Reg RAX, Qword (RegOffset(R11, (List.length instrs)+3))) ]
+      acc
+      @ [ IMov (Reg RAX, Qword (RegOffset(R11, ((List.length acc)/2)+3))) ]
       @ [ IMov (RegOffset(reg, slot), Reg RAX) ]
     ) free_vars []
     @ [ ISub (Reg RSP, Const (Int64.mul depth 8L)) ]
@@ -449,10 +450,11 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ ILea (Reg R11, Rel (Label lambda_label)) ]
     @ [ IMov (Qword (RegOffset (R15, 1)), Reg R11) ]
     @ [ IMov (Qword (RegOffset (R15, 2)), Const n_free_vars) ]
-    @ List.fold_right (fun id instrs -> 
+    @ List.fold_right (fun id acc -> 
       let reg, slot = lookup_env id env in
-      [ IMov (Reg R10, RegOffset(reg, slot)) ]
-      @ [ IMov (Qword (RegOffset(R15, (List.length instrs)+3)), Reg R10) ]
+      acc
+      @ [ IMov (Reg R10, RegOffset(reg, slot)) ]
+      @ [ IMov (Qword (RegOffset(R15, ((List.length acc)/2)+3)), Reg R10) ]
     ) free_vars []
     @ [ IMov (Reg dst, Reg R15) ]
     @ [ IAdd (Reg dst, Const closure_tag) ]
