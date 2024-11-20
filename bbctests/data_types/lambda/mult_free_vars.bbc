@@ -1,0 +1,9 @@
+NAME: multiple free vars
+DESCRIPTION: test lambda closure creation with multiple free variables
+SRC:
+(let (z 4) (let (y 3) (let (foo (lambda (x) (+ y (print (+ x z)))) ) (@ (print foo) (print 2)))))
+EXPECTED:
+> 2
+> <clos:1>
+> 6
+9
