@@ -247,7 +247,7 @@ and acc_cexpr cexpr env free =
     List.fold_right (fun imm free -> acc_immexpr imm env free) imms free'
 and acc_immexpr immexpr env free =
   match immexpr with
-  | Id id -> if List.mem id env then free else id::free
+  | Id id -> if (List.mem id env) || (List.mem id free) then free else id::free
   | Lambda (params, body_expr) -> acc_aexpr body_expr (params @ env) free
   | _ -> free
 
