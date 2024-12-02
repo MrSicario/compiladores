@@ -117,25 +117,25 @@ let error_handlers =
     [ ILabel (Label "error_not_number") ]
     @ [ IMov (Reg RDI, Const 1L) ]
     @ [ IMov (Reg RSI, Reg RAX) ]
-    @ [ ICall (Label "error") ]
+    @ [ ICall (Label "_error") ]
   in
   let error_not_bool =
     [ ILabel (Label "error_not_bool") ]
     @ [ IMov (Reg RDI, Const 2L) ]
     @ [ IMov (Reg RSI, Reg RAX) ]
-    @ [ ICall (Label "error") ]
+    @ [ ICall (Label "_error") ]
   in
   let error_not_tuple =
     [ ILabel (Label "error_not_tuple") ]
     @ [ IMov (Reg RDI, Const 3L) ]
     @ [ IMov (Reg RSI, Reg RAX) ]
-    @ [ ICall (Label "error")]
+    @ [ ICall (Label "_error")]
   in
   let error_not_closure =
     [ ILabel (Label "error_not_closure") ]
     @ [ IMov (Reg RDI, Const 4L) ]
     @ [ IMov (Reg RSI, Reg RAX) ]
-    @ [ ICall (Label "error")]
+    @ [ ICall (Label "_error")]
   in
   let error_index =
     [ ILabel (Label "error_index") ]
@@ -144,7 +144,7 @@ let error_handlers =
     @ tag_type_at R10 CInt
     @ [ IMov (Reg RSI, Reg RAX) ]
     @ [ IMov (Reg RDX, Reg R10) ]
-    @ [ ICall (Label "error") ]
+    @ [ ICall (Label "_error") ]
   in
   let error_arity_mismatch =
     [ ILabel (Label "error_wrong_arity") ]
@@ -154,9 +154,32 @@ let error_handlers =
     @ [ ISal (Reg R11, Const 1L) ]
     @ [ IMov (Reg RSI, Reg R10) ]
     @ [ IMov (Reg RDX, Reg R11) ]
-    @ [ ICall (Label "error") ]
+    @ [ ICall (Label "_error") ]
   in String.concat "\n" (List.map pp_instrs 
   [error_not_number ; error_not_bool ; error_not_tuple ; error_not_closure ; error_index; error_arity_mismatch])
+
+let malloc n =
+  [ IPush (Reg R9) ]
+  @ [ IPush (Reg R8) ]
+  @ [ IPush (Reg RCX) ]
+  @ [ IPush (Reg RDX) ]
+  @ [ IPush (Reg RSI) ]
+  @ [ IPush (Reg RDI) ]
+  @ [ IMov (Reg RDI, Reg R15) ] (*alloc_ptr*)
+  @ [ IMov (Reg RSI, Const (Int64.of_int n)) ] (*words_needed*)
+  @ [ IMov (Reg RDX, Reg RBP) ] (*cur_frame*)
+  @ [ IMov (Reg RCX, Reg RSP) ] (* cur_sp *)
+  @ [ ICall (Label "_try_gc") ]
+  @ [ IPop (Reg RDI) ]
+  @ [ IPop (Reg RSI) ]
+  @ [ IPop (Reg RDX) ]
+  @ [ IPop (Reg RCX) ]
+  @ [ IPop (Reg R8) ]
+  @ [ IPop (Reg R9) ]
+  @ [ IMov (Reg R15, Reg RAX) ] (* store returned alloc_ptr as new heap top *)
+
+let mbump n =
+  [ IAdd (Reg R15, Const(Int64.of_int (8 * (n+1)))) ]
 
 let rec compile_aexpr (expr : aexpr) (env : env) (fenv : afenv) : instruction list =
   match expr with
@@ -169,17 +192,18 @@ let rec compile_aexpr (expr : aexpr) (env : env) (fenv : afenv) : instruction li
     let ids, lambdas = List.split bind_list in
     let env', slot_list = multiextend_env ids env in
     let precomp = fun lambexp slot ->
-      let n_free_vars = Int64.of_int (List.length (lambda_get_freevars lambexp)) in
-      [ IMov (Reg RAX, Reg R11) ] (* we store the lambda values before compiling them *)
+      let n_free_vars = (List.length (lambda_get_freevars lambexp)) in
+      malloc (3 + n_free_vars)
+      @ [ IMov (Reg R11, Reg R15) ]
+      @ [ IMov (Reg RAX, Reg R11) ] (* we store the lambda values before compiling them *)
       @ [ IAdd (Reg RAX, Const closure_tag) ]
       @ [ IMov (RegOffset (RBP, slot), Reg RAX) ]
-      @ [ IAdd (Reg R11, Const (Int64.mul (Int64.add n_free_vars 3L) 8L))] in
+      @ [ IAdd (Reg R11, Const (Int64.of_int ((n_free_vars + 3) * 8))) ] in
     let comp = fun exp slot ->
       compile_immexpr exp env' fenv
       @ [ IMov (RegOffset (RBP, slot), Reg RAX)]
     in
-    [ IMov (Reg R11, Reg R15) ]
-    @ List.fold_right (@) (List.map2 precomp lambdas slot_list) []
+    List.fold_right (@) (List.map2 precomp lambdas slot_list) []
     @ List.fold_right (@) (List.map2 comp lambdas slot_list) []
     @ (compile_aexpr body_expr env' fenv)
   | If (cond_expr, then_expr, else_expr) ->
@@ -218,7 +242,7 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
       @ [ IPush (Reg RSI) ]
       @ [ IPush (Reg RDI) ]
       @ [ IMov (Reg RDI, Reg RAX)]
-      @ [ ICall (Label "print")]
+      @ [ ICall (Label "_print")]
       @ [ IPop (Reg RDI) ]
       @ [ IPop (Reg RSI) ]
       @ [ IPop (Reg RDX) ]
@@ -328,9 +352,9 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
       in let call_instr = 
         let n = List.length args in
         if n <= 6
-          then [ ICall (Label name) ]
+          then [ ICall (Label ("_" ^ name)) ]
           else let x = Int64.of_int (8 * (n-6)) in
-          [ ICall (Label name) ] @ [ IAdd (Reg RSP, Const x) ]
+          [ ICall (Label ("_" ^ name)) ] @ [ IAdd (Reg RSP, Const x) ]
       in caller_saved_push @ arg_instrs @ call_instr @ caller_saved_pop @ tag_type ret_type @ test_type ret_type
     end
   | Tuple imm_list ->
@@ -344,12 +368,15 @@ and compile_cexpr (expr : cexpr) (env : env) (fenv : afenv) : instruction list =
         @ [ IMov (Qword (RegOffset (R15, n)), Reg RAX) ]
         @ move_elems tl (n+1)
     in
-    [ IComment "store the size of the tuple in slot 0"]
+    [ IComment "allocate n+1 slots for tuple" ]
+    @ malloc (n+1) (* dont forget to mbump later! *)
+    @ [ IMov (Reg R15, Reg RAX) ]
+    @ [ IComment "store the size of the tuple in slot 0"]
     @ [ IMov (Qword (RegOffset (R15, 0)), Const (Int64.of_int n)) ]
-    @ move_elems imm_list 1
+    @ move_elems imm_list 1 (* store each elem *)
     @ [ IMov (Reg RAX, Reg R15) ]
     @ tag_type (CTuple [])
-    @ [ IAdd (Reg R15, Const(Int64.of_int (8 * (n+1)))) ] (* bump heap pointer *)
+    @ mbump (n+1) (* bump heap pointer *)
   | Set (t, k, v) ->
     compile_immexpr k env fenv (* index *)
     @ test_if_number
@@ -419,7 +446,7 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     let free_vars = get_free_vars lambda_expr params in
     let arity = Int64.of_int (List.length params) in
     let depth = Int64.of_int (get_depth lambda_expr) in
-    let n_free_vars = Int64.of_int (List.length free_vars) in
+    let n_free_vars = List.length free_vars in
     let rec extend_env_rec lst env =
       match lst with
       | [] -> env
@@ -430,7 +457,7 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ ILabel (Label lambda_label) ]
     @ [ IPush (Reg RBP) ]
     @ [ IMov (Reg RBP, Reg RSP) ]
-    @ [ ISub (Reg RSP, Const (Int64.mul n_free_vars 8L)) ]
+    @ [ ISub (Reg RSP, Const (Int64.of_int (8 * n_free_vars))) ]
     @ [ IMov (Reg R11, Reg RDI) ]
     @ [ ISub (Reg R11, Const closure_tag) ]
     @ List.fold_right (fun id acc -> 
@@ -446,10 +473,12 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     @ [ IRet ]
     @ [ ILabel (Label (lambda_label^"_end")) ]
     (* Closure *)
+    @ [ IComment "allocate 3+n_free_vars slots for closure data" ]
+    @ malloc (3 + n_free_vars)
     @ [ IMov (Qword (RegOffset (R15, 0)), Const arity) ]
     @ [ ILea (Reg R11, Rel (Label lambda_label)) ]
     @ [ IMov (Qword (RegOffset (R15, 1)), Reg R11) ]
-    @ [ IMov (Qword (RegOffset (R15, 2)), Const n_free_vars) ]
+    @ [ IMov (Qword (RegOffset (R15, 2)), Const (Int64.of_int n_free_vars)) ]
     @ List.fold_right (fun id acc -> 
       let reg, slot = lookup_env id env in
       acc
@@ -458,7 +487,7 @@ and compile_immexpr (expr:immexpr) ?(dst:reg = RAX) (env:env) (fenv:afenv)=
     ) free_vars []
     @ [ IMov (Reg dst, Reg R15) ]
     @ [ IAdd (Reg dst, Const closure_tag) ]
-    @ [ IAdd (Reg R15, Const (Int64.mul (Int64.add n_free_vars 3L) 8L)) ]
+    @ mbump (3 + n_free_vars)
 
 and build_args args ?(self:reg option) env fenv =
   let rec inner_rec args instrs =
@@ -543,11 +572,13 @@ let compile_afundefs (fenv: afundef list) : instruction list =
   in accumulate fenv []
 
 let gen_prologue afenv =
-  let externs = (List.map (String.cat "\nextern ") (get_external_funcs afenv)) in
+  let externs = (List.map (String.cat "\nextern _") (get_external_funcs afenv)) in
   let header = "
 section .text
-extern error
-extern print" ^ (String.concat "" externs) ^ "
+extern _try_gc
+extern _error
+extern _print" ^ (String.concat "" externs) ^ "
+extern _set_stack_root
 global our_code_starts_here" in header
 
 let compile_prog (p : prog) : string =
@@ -561,14 +592,13 @@ let compile_prog (p : prog) : string =
 our_code_starts_here:
   push RBP
   mov RBP, RSP
-  mov R15, RDI
-  add R15, 7
-  mov R11, 0xfffffffffffffff8
-  and R15, R11" ^ (let depth = get_depth aexpr in
+  mov R15, RDI" ^ (let depth = get_depth aexpr in
   if depth = 0
     then ""
     else "
-  sub RSP, 8*" ^ string_of_int (depth + depth mod 2)) ^ pp_instrs instrs in
+  sub RSP, 8*" ^ string_of_int (depth + depth mod 2)) ^ "
+  mov RDI, RSP
+  call _set_stack_root" ^ pp_instrs instrs in
   let epilogue ="
   mov RSP, RBP
   pop RBP
