@@ -306,10 +306,18 @@ u64 *collect(u64* cur_frame, u64* cur_sp) {
 	// init spaces
 	alloc_ptr = heap_from_space;
 	scan_ptr = heap_from_space;
-	
-	// scan stack (todo: repeat this until stack root)
-	for (u64 *cur_slot = cur_sp+6; cur_slot < stack_root || cur_slot < cur_frame; cur_slot++) {
-		try_copy_forward(cur_slot);
+
+	// scan stack
+	while (1) {
+		for (u64 *cur_slot = cur_sp+6; cur_slot < cur_frame; cur_slot++) {
+			try_copy_forward(cur_slot);
+		}
+		if (cur_frame < stack_root) {
+			cur_frame = (u64*)*cur_frame;
+			cur_sp = cur_frame + 2;
+		} else {
+			break;
+		}
 	}
 
 	// scan objects in the new heap to bring over what's necessary
