@@ -307,7 +307,6 @@ u64 *collect(u64* cur_frame, u64* cur_sp) {
 	alloc_ptr = heap_from_space;
 	scan_ptr = heap_from_space;
 	
-	u64 msize;
 	// scan stack (todo: repeat this until stack root)
 	for (u64 *cur_slot = cur_sp+6; cur_slot < stack_root || cur_slot < cur_frame; cur_slot++) {
 		try_copy_forward(cur_slot);
