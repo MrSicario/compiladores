@@ -229,13 +229,13 @@ void print_heaps() {
 void print_stack(u64* rbp, u64* rsp) {
 	printf("|------- frame %p to %p  ------\n", rsp, rbp);
 	for (u64* cur_word = rsp+6; cur_word < rbp; cur_word++) {
-	u64 val = (u64)*cur_word;
-	printf("| %p: %p", cur_word, (u64*)*cur_word);
-	if (is_heap_ptr((u64*)val)) {
-		if (get_type(val) == Tuple){ printf(" (tuple)"); }
-		else if (get_type(val) == Closure){ printf(" (closure)"); }
-	}
-	printf("\n");
+		u64 val = (u64)*cur_word;
+		printf("| %p: %p", cur_word, (u64*)*cur_word);
+		if (is_heap_ptr((u64*)val)) {
+			if (get_type(val) == Tuple){ printf(" (tuple)"); }
+			else if (get_type(val) == Closure){ printf(" (closure)"); }
+		}
+		printf("\n");
 	}
 	if (rbp < stack_root) {
 		print_stack((u64*)*rbp, rbp + 2);
