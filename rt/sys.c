@@ -22,7 +22,7 @@ const u64 POINTER_MASK = 0b111;
 
 /// Memory management & heap state
 u64 STACK_SIZE = 0x800000;
-u64 HEAP_SIZE = 32;
+u64 HEAP_SIZE = 16;
 int USE_GC = 1;
 u64 *stack_root;
 u64 *heap_alloc_start;
@@ -48,11 +48,11 @@ typedef enum {
 
 // Types
 typedef enum {
-	Int,
-	Bool,
-	Tuple,
-	Closure,
-	Forward
+	Int = 1,
+	Bool = 2,
+	Tuple = 3,
+	Closure = 4,
+	Forward = 5
 } Type;
 
 void error(ErrCode err, u64 val, u64 extra);
@@ -95,6 +95,8 @@ void error(ErrCode err, u64 val, u64 extra) {
 }
 
 // Type and tagging funs
+
+// Get the type of a value by rading its tag, will always return a type if correct or crash.
 Type get_type(u64 val) {
 	if ((val & 0b1) == 0) return Int;
 	u64 tag = val & POINTER_MASK;
@@ -106,6 +108,20 @@ Type get_type(u64 val) {
 		default: error(RT_ERROR, val, 0);
 	}
 	exit(-1);
+}
+
+// Get the type of a value, or 0 if not a well formed value.
+Type get_type_unsafe(u64 val) {
+	if ((val & 0b1) == 0) return Int;
+	u64 tag = val & POINTER_MASK;
+	switch (tag) {
+		case BOOL_TAG: return Bool;
+		case TUPLE_TAG: return Tuple;
+		case CLOSURE_TAG: return Closure;
+		case FORWARD_TAG: return Forward;
+		default: return 0;
+	}
+	return 0;
 }
 
 u64 tag(u64 val, Type type) {
@@ -228,6 +244,7 @@ void print_stack(u64* rbp, u64* rsp) {
 	}
 }
 
+// returns the length of an object in slots
 size_t memsize(u64 val) {
 	switch (get_type(val)) {
 		case Int: return 1;
@@ -248,34 +265,36 @@ Type get_heap_object_type(u64 *heap_object) {
 	return Tuple;
 }
 
-u64 copy_and_forward(u64 *val_addr) {
-	u64 val = *val_addr;
-	switch (get_type(val)) { // no heap pointers here, do nothing
-		case Int: return val;
-		case Bool: return val;
-		default: break;
-	}
+// given a value_slot (pointer to stack or heap), if the value is an object (tuple or closure):
+// copy and forward the object if elegible, then set the value to match the new address.
+void try_copy_forward(u64 *value_slot) {
+	u64 *new_addr;
+	u64 val = *value_slot;
+	Type value_type = get_type_unsafe(val);
+	if (value_type == Tuple || value_type == Closure) {
+		u64 *object = (u64*)untag(val); // since it's a tuple/closure, untagging gives the address of the object
+		if (is_heap_ptr(object)) {
+			// now check the first element of the object data
+			// it can be (1): a Forward value to an already copied object -> modify the original value so it points to the new adress instead of here
+			// or (2): literally anything else -> copy forward this and also set the original value
+			if (get_type_unsafe(object[0]) == Forward) {
+				new_addr = (u64*)untag(object[0]); // get the forward adress actually containing the object
+			} else {
+				new_addr = alloc_ptr;
+				size_t object_len = memsize(val);
+				memcpy(new_addr, object, object_len * sizeof(u64)); // copy the object to the new address (memcpy copies n bytes!!)
+				object[0] = tag((u64)new_addr, Forward); // on the (now old) object, replace the first slot with a Forward value
+				alloc_ptr += object_len; // push the allocation pointer by object_len slots
+			}
 
-	// now, the value can be only a tuple or closure value (which untagged is the pointer to said object)
-	u64 *object_addr = (u64*)untag(val);
-	if ((*object_addr & POINTER_MASK) == FORWARD_TAG) {
-		// if the object is already copied, instead of the data it will contain only the address of the new object with a forward tag
-		// so we just change the tuple/closure value to point to the true object instead. no copying required
-		return tag(untag(*object_addr), get_type(val)); // get new object location by removing forward tag, re-tag it with the expected type
-	} else {
-		// not a forwarded object, so we have to move it
-		u64 *new_pointer = alloc_ptr;
-		size_t msize = memsize(val);
-		memcpy(new_pointer, object_addr, msize * sizeof(u64)); // copy object data to new space (size in bytes)
-		if (is_heap_ptr(val_addr)) {
-			*object_addr = tag((u64)new_pointer, Forward); // replace the data at the old object location with a forward pointer
+			// finally change the original value regardless of what happened (since either way the object is not where the value says anymore)
+			*value_slot = tag((u64)new_addr, value_type);
 		}
-		alloc_ptr += msize;
-		return tag((u64)new_pointer, get_type(val));
 	}
 }
 
-u64* collect(u64* cur_frame, u64* cur_sp) {
+
+u64 *collect(u64* cur_frame, u64* cur_sp) {
 	// swap from-space to-space
 	u64 *tmp = heap_from_space;
 	heap_from_space = heap_to_space;
@@ -289,42 +308,27 @@ u64* collect(u64* cur_frame, u64* cur_sp) {
 	scan_ptr = heap_from_space;
 	
 	u64 msize;
-	// scan stack and copy roots (todo: repeat this until stack root)
-	for (u64 *cur_elem = cur_sp+6; cur_elem < stack_root || cur_elem < cur_frame; cur_elem++) {
-		*cur_elem = copy_and_forward(cur_elem);
+	// scan stack (todo: repeat this until stack root)
+	for (u64 *cur_slot = cur_sp+6; cur_slot < stack_root || cur_slot < cur_frame; cur_slot++) {
+		try_copy_forward(cur_slot);
 	}
-	// scan objects in the heap
+
+	// scan objects in the new heap to bring over what's necessary
 	while (scan_ptr < alloc_ptr) {
-		// get the type of the value somehow and call to call the correct function and get the correct size of the object
-		switch (get_heap_object_type(scan_ptr)) {
-			case Tuple:
-			tuple_elems_start = scan_ptr+1;
-			u64 tuple_len = scan_ptr[0];
-			for (u64 *tuple_slot = tuple_elems_start; tuple_slot < tuple_elems_start + tuple_len; tuple_slot++) {
-				*tuple_slot = copy_and_forward(tuple_slot);
-			}
-			msize = memsize(tag((u64)scan_ptr, Tuple));
-			scan_ptr += msize;
-			break;
-			case Closure:
-			closure_values_start = alloc_ptr + 3;
-			u64 closure_n_free_vars = alloc_ptr[2];
-			for (u64 *closure_slot = closure_values_start; closure_slot < closure_values_start + closure_n_free_vars; closure_slot++) {
-				*closure_slot = copy_and_forward(closure_slot);
-			}
-			msize = memsize(tag((u64)scan_ptr, Closure));
-			scan_ptr += msize;
-			break;
-			default:
-			break;
-		}
+		try_copy_forward(scan_ptr);
+		scan_ptr++;
+	}
+
+	// clean up old heap
+	for (u64 *slot = heap_to_space; slot < heap_to_space + HEAP_SIZE; slot++) {
+		*slot = 0ull;
 	}
 
 	return alloc_ptr;
 }
 
 /* trigger GC if enabled and needed, out-of-memory error if insufficient */
-u64* try_gc(u64* alloc_ptr, u64 words_needed, u64* cur_frame, u64* cur_sp) {
+u64 *try_gc(u64* alloc_ptr, u64 words_needed, u64* cur_frame, u64* cur_sp) {
 	if (USE_GC==1 && alloc_ptr + words_needed > heap_from_space + HEAP_SIZE) {
 		printf("| need memory: GC!\n");
 		alloc_ptr = collect(cur_frame, cur_sp);
